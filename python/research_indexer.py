@@ -10,6 +10,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+from collections import OrderedDict
 
 from parsers import parse_bibtex, code_nodes, data_rows, tex_commands
 import pdf_engine
@@ -40,6 +41,7 @@ def matches(name, pattern):
 
 class Index:
     def __init__(self, root):
+        self.freshness = OrderedDict()
         self.root = Path(root).resolve(strict=True)
         self.local = self.root / '.research-copilot'
         if self.local.is_symlink():
@@ -289,7 +291,23 @@ class Index:
     def current(self, a):
         try:
             p = self.safe_path(a['path'])
-            return p.is_file() and p.stat().st_size <= MAX_BYTES and digest(p.read_bytes()) == a['hash']
+            info = p.stat()
+            if not p.is_file() or info.st_size > MAX_BYTES:
+                return False
+            def stamp(stat):
+                return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+            signature = stamp(info)
+            cached = self.freshness.get(str(p))
+            if not cached or cached[0] != signature:
+                content_hash = digest(p.read_bytes())
+                if stamp(p.stat()) != signature:
+                    return False  # Concurrent write: never cache a torn read.
+                cached = (signature, content_hash)
+                self.freshness[str(p)] = cached
+            self.freshness.move_to_end(str(p))
+            while len(self.freshness) > 256:
+                self.freshness.popitem(last=False)
+            return cached[1] == a['hash']
         except (ValueError, OSError):
             return False
 

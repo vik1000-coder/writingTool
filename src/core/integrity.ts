@@ -60,6 +60,14 @@ export const OUTPUT_SCHEMA = object({
     ],
   },
 });
+export const WRITE_OUTPUT_SCHEMA = object({
+  insert_text: string,
+  evidence_ids: strings,
+  citation_keys: strings,
+  claims: OUTPUT_SCHEMA.properties.claims,
+});
+export const schemaForMode = (mode: ContextPacket["mode"]) =>
+  mode === "write" ? WRITE_OUTPUT_SCHEMA : OUTPUT_SCHEMA;
 
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -80,7 +88,19 @@ export function validateSuggestion(
   value: unknown,
   mode: ContextPacket["mode"],
 ): Suggestion {
-  const r = record(value);
+  let r = record(value);
+  if (mode === "write" && !Object.hasOwn(r, "mode")) {
+    r = {
+      ...r,
+      mode: "write",
+      title: "Continue your thought",
+      text: "",
+      outline_ids: [],
+      source_notes: [],
+      proposal: null,
+      edit: null,
+    };
+  }
   if (
     r.mode !== mode ||
     !["guide", "write", "evidence", "visual", "structure", "chat"].includes(

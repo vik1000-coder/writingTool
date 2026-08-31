@@ -58,3 +58,11 @@ See [VALIDATION.md](VALIDATION.md) for test coverage, live versus fixture checks
 - [x] Exact local quote highlighted in the left panel; session lock survives writing navigation and clears when the source changes.
 - [x] Preserve native WRITE completion and explicit reviewed manuscript edits.
 - [x] TDD coverage for provider protocol, source projections, unsafe display text, native hover, and lock lifecycle.
+
+## v0.2.1 follow-up: low-latency WRITE
+
+- [x] Dedicated Grok 4.3 WRITE profile with reasoning disabled and compact structured output.
+- [x] Exact session-memory continuation cache with typed-prefix reuse, TTL/LRU/byte limits, and explicit regeneration/clear behavior.
+- [x] Source-hash revalidation, dirty-buffer invalidation, and cached file-digest freshness checks.
+- [x] Stable xAI prompt prefix/conversation ID plus cached-token observability.
+- [x] Unit, protocol, Python, and real VS Code host regressions written before implementation.

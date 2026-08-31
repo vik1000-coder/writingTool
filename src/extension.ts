@@ -25,6 +25,7 @@ import { sidebarHtml } from "./ui/shell";
 import { showPdf } from "./ui/pdf";
 import { sourceCards, type SourceCard } from "./core/cards";
 import { SuggestionHover } from "./ui/hover";
+import { CompletionCache } from "./core/completion-cache";
 
 const isTex = (document: vscode.TextDocument) =>
   document.uri.scheme === "file" &&
@@ -78,6 +79,23 @@ export class ResearchCopilot
   private cardToken?: string;
   private selectedSource?: SourceCard & { locked: boolean };
   private sourceFocus = 0;
+  private writeCache = new CompletionCache<{
+    context: ContextPacket;
+    prompt: string;
+    response: unknown;
+    suggestion: ReturnType<typeof validateSuggestion>;
+    backend: string;
+  }>();
+  private suggestionTask?: Promise<void>;
+  private pendingMode?: Mode | "chat";
+  private providerSession = randomUUID();
+  private timing?: {
+    source: "cache" | "model";
+    totalMs: number;
+    cachedInputTokens?: number;
+    inputTokens?: number;
+    outputTokens?: number;
+  };
   private contextPacket?: ContextPacket;
   private lastRequest?: {
     prompt: string;
@@ -86,6 +104,7 @@ export class ResearchCopilot
     resolved?: ResolvedSuggestion;
     timestamp: string;
     backend: string;
+    cache?: { hit: true; consumed: number; ageMs: number };
     applied?: unknown;
   };
   private history: { role: string; text: string }[] = [];
@@ -156,12 +175,15 @@ export class ResearchCopilot
             token,
           ) => {
             if (this.mode !== "write" || !isTex(document)) return [];
-            if (
-              !this.ghost &&
-              !this.busy &&
-              context.triggerKind === vscode.InlineCompletionTriggerKind.Invoke
-            )
-              await this.suggest(undefined, false, false);
+            if (!this.ghost && !this.busy) {
+              const reused = await this.reuseWrite(document, position);
+              if (
+                !reused &&
+                context.triggerKind ===
+                  vscode.InlineCompletionTriggerKind.Invoke
+              )
+                await this.suggest(undefined, false, false);
+            }
             if (token.isCancellationRequested) return [];
             const ghost = this.ghost;
             this.lastInlineRequest = {
@@ -225,6 +247,14 @@ export class ResearchCopilot
         ) {
           this.invalidateSource(e.document.uri);
           this.invalidate();
+          // A cached completion may include any project source. Keep prefix
+          // reuse for typing in the active manuscript, but invalidate for
+          // every other dirty buffer because the on-disk hash no longer
+          // represents what the author sees.
+          if (
+            e.document.uri.toString() !== this.editor?.document.uri.toString()
+          )
+            this.writeCache.clear();
           this.reviewed = undefined;
           if (e.document === this.editor?.document) this.scheduleAutomatic();
         }
@@ -233,6 +263,8 @@ export class ResearchCopilot
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration("researchCopilot")) {
+          this.writeCache.clear();
+          this.providerSession = randomUUID();
           this.invalidate();
           this.codex?.dispose();
           this.codex = undefined;
@@ -349,6 +381,9 @@ export class ResearchCopilot
       case "grokApiKey":
         await this.apiKey("grok");
         break;
+      case "clearCache":
+        this.clearCache();
+        break;
       case "cite":
         if (typeof m.id === "string") await this.insertCitation(m.id);
         break;
@@ -392,6 +427,8 @@ export class ResearchCopilot
         cardToken: this.cardToken,
         selectedSource: this.selectedSource,
         sourceFocus: this.sourceFocus,
+        timing: this.timing,
+        cachedCompletions: this.writeCache.size,
         context: this.contextPacket,
         pins: this.projectState.pins,
         excluded: this.projectState.excluded,
@@ -444,6 +481,7 @@ export class ResearchCopilot
     this.publish();
   }
   private resetIndex() {
+    this.writeCache.clear();
     this.selectedSource = undefined;
     clearTimeout(this.watchTimer);
     this.pendingFiles.clear();
@@ -526,6 +564,7 @@ export class ResearchCopilot
         )
           return;
         this.invalidateSource(uri, configChange);
+        this.writeCache.clear();
         this.invalidate();
         this.pendingFiles.add(configChange ? "*" : uri.fsPath);
         clearTimeout(this.watchTimer);
@@ -637,14 +676,19 @@ export class ResearchCopilot
     if (kind === "codex") return this.getCodex();
     if (kind !== "local" && kind !== "openai" && kind !== "grok")
       throw new Error("Unknown backend in settings");
+    const model =
+      kind === "grok" && mode === "write"
+        ? this.setting("grokWriteModel", "grok-4.3")
+        : this.setting(`${kind}Model`, kind === "grok" ? "grok-4.6" : "");
     return new HttpBackend({
       kind,
-      model: this.setting(`${kind}Model`, kind === "grok" ? "grok-4.6" : ""),
+      model,
       endpoint: this.setting("localEndpoint", "http://127.0.0.1:11434/v1"),
       apiKey:
         kind !== "local"
           ? await this.extension.secrets.get(`${kind}-api-key`)
           : undefined,
+      cacheSession: `${this.providerSession}-${mode}`,
     });
   }
   private async assemble(
@@ -756,7 +800,43 @@ export class ResearchCopilot
       packet.warnings.push(warning);
     return packet;
   }
-  async suggest(question?: string, automatic = false, triggerInline = true) {
+  async suggest(
+    question?: string,
+    automatic = false,
+    triggerInline = true,
+    regenerate = !automatic && triggerInline,
+  ) {
+    const mode = question ? "chat" : this.mode;
+    if (this.suggestionTask) {
+      if (this.pendingMode === mode) await this.suggestionTask;
+      return;
+    }
+    const task = (async () => {
+      if (
+        !question &&
+        mode === "write" &&
+        !regenerate &&
+        (await this.reuseWrite())
+      )
+        return;
+      await this.generateSuggestion(question, automatic, triggerInline);
+    })();
+    this.suggestionTask = task;
+    this.pendingMode = mode;
+    try {
+      await task;
+    } finally {
+      if (this.suggestionTask === task) {
+        this.suggestionTask = undefined;
+        this.pendingMode = undefined;
+      }
+    }
+  }
+  private async generateSuggestion(
+    question?: string,
+    automatic = false,
+    triggerInline = true,
+  ) {
     if (
       !question &&
       !shouldTrigger(
@@ -830,6 +910,14 @@ export class ResearchCopilot
     const epoch = this.epoch,
       version = editor.document.version,
       offset = editor.document.offsetAt(editor.selection.active);
+    const started = performance.now();
+    const source = editor.document.getText();
+    const snapshot = {
+      scope: this.cacheScope(),
+      uri: editor.document.uri.toString(),
+      before: source.slice(0, offset),
+      after: source.slice(offset),
+    };
     const abort = new AbortController();
     this.abort = abort;
     this.busy = true;
@@ -902,6 +990,29 @@ export class ResearchCopilot
             offset,
             text: suggestion.insert_text,
           };
+        if (
+          mode === "write" &&
+          this.result.insertable &&
+          this.setting("cacheSuggestions", true)
+        )
+          this.writeCache.put(snapshot, suggestion.insert_text, {
+            context: packet,
+            prompt,
+            response: event.value,
+            suggestion,
+            backend: backendKind,
+          });
+        this.timing = {
+          source: "model",
+          totalMs: Math.round(performance.now() - started),
+          ...(event.usage
+            ? {
+                cachedInputTokens: event.usage.cachedInputTokens,
+                inputTokens: event.usage.inputTokens,
+                outputTokens: event.usage.outputTokens,
+              }
+            : {}),
+        };
         if (this.setting("diagnostics", true) && this.result.warnings.length) {
           const current = cursorContext(
             editor.document.getText(),
@@ -945,6 +1056,145 @@ export class ResearchCopilot
       );
     if (mode === "guide" && this.cardToken && !automatic)
       await this.hover.show();
+  }
+  private cacheScope() {
+    const kind = this.backendKind("write");
+    const model =
+      kind === "grok"
+        ? this.setting("grokWriteModel", "grok-4.3")
+        : this.setting(kind === "codex" ? "model" : `${kind}Model`, "");
+    return `${this.root?.uri}:${kind}:${model}:${this.setting("contextBudget", 24000)}`;
+  }
+  private async reuseWrite(
+    document?: vscode.TextDocument,
+    position?: vscode.Position,
+  ) {
+    if (
+      !this.setting("cacheSuggestions", true) ||
+      !this.editor ||
+      !this.index ||
+      !this.root ||
+      this.mode !== "write"
+    )
+      return false;
+    const started = performance.now(),
+      editor = this.editor,
+      at = position ?? editor.selection.active;
+    if (
+      document &&
+      (document !== editor.document ||
+        document.offsetAt(at) !==
+          editor.document.offsetAt(editor.selection.active))
+    )
+      return false;
+    const offset = editor.document.offsetAt(at),
+      source = editor.document.getText();
+    const hit = this.writeCache.find({
+      scope: this.cacheScope(),
+      uri: editor.document.uri.toString(),
+      before: source.slice(0, offset),
+      after: source.slice(offset),
+    });
+    if (!hit) return false;
+    const epoch = this.epoch,
+      version = editor.document.version;
+    const activePath = path
+      .relative(this.root.uri.fsPath, editor.document.uri.fsPath)
+      .split(path.sep)
+      .join("/");
+    const sourceIds = hit.data.context.artifacts
+      .filter((a) => a.kind !== "tex")
+      .map((a) => a.id);
+    const dirtyPaths = new Set(
+      vscode.workspace.textDocuments
+        .filter((d) => d.isDirty && d.uri.scheme === "file")
+        .map((d) => path.resolve(d.uri.fsPath)),
+    );
+    if (
+      hit.data.context.artifacts.some(
+        (a) =>
+          a.path !== activePath &&
+          dirtyPaths.has(path.resolve(this.root!.uri.fsPath, a.path)),
+      )
+    ) {
+      this.writeCache.clear();
+      return false;
+    }
+    const current = await this.index.resolve(sourceIds);
+    const hashes = new Map(
+      hit.data.context.artifacts.map((a) => [a.id, a.hash]),
+    );
+    const activeArtifactIds = new Set(
+      hit.data.context.artifacts
+        .filter((a) => a.path === activePath)
+        .map((a) => a.id),
+    );
+    if (
+      hit.consumed > 0 &&
+      (hit.data.suggestion.evidence_ids.some((id) =>
+        activeArtifactIds.has(id),
+      ) ||
+        hit.data.suggestion.outline_ids.some((id) =>
+          activeArtifactIds.has(id),
+        ) ||
+        hit.data.suggestion.claims.some((claim) =>
+          activeArtifactIds.has(claim.artifact_id),
+        ))
+    ) {
+      return false;
+    }
+    const unchanged = current.filter((a) => hashes.get(a.id) === a.hash);
+    unchanged.push(
+      ...hit.data.context.artifacts.filter((a) => a.kind === "tex"),
+    );
+    if (
+      epoch !== this.epoch ||
+      version !== editor.document.version ||
+      unchanged.length !== hit.data.context.artifacts.length
+    ) {
+      this.writeCache.clear();
+      return false;
+    }
+    const resolved = resolveSuggestion(hit.data.suggestion, unchanged);
+    if (!resolved.insertable) {
+      this.writeCache.clear();
+      return false;
+    }
+    this.result = {
+      ...resolved,
+      suggestion: { ...resolved.suggestion, insert_text: hit.remaining },
+    };
+    this.sources = sourceCards(this.result, unchanged);
+    this.contextPacket = hit.data.context;
+    this.lastRequest = {
+      prompt: hit.data.prompt,
+      context: hit.data.context,
+      response: hit.data.response,
+      resolved: this.result,
+      timestamp: new Date().toISOString(),
+      backend: hit.data.backend,
+      cache: { hit: true, consumed: hit.consumed, ageMs: hit.ageMs },
+    };
+    this.ghost = {
+      uri: editor.document.uri.toString(),
+      version,
+      offset,
+      text: hit.remaining,
+    };
+    this.timing = {
+      source: "cache",
+      totalMs: Math.max(0, Math.round(performance.now() - started)),
+    };
+    this.status = `Cached WRITE continuation ready · ${hit.remaining.length} characters · no model call.`;
+    this.publish();
+    return true;
+  }
+  clearCache() {
+    this.writeCache.clear();
+    this.invalidate();
+    this.timing = undefined;
+    this.status = "Suggestion cache cleared. Your manuscript is unchanged.";
+    this.publish();
   }
   async showCard() {
     if (this.mode !== "guide" || !this.cardToken) {
@@ -1069,6 +1319,7 @@ export class ResearchCopilot
   private async updateControl(action: "pin" | "exclude", id: string) {
     await this.ensureIndex();
     this.invalidate();
+    this.writeCache.clear();
     if (
       action === "exclude" &&
       (this.selectedSource?.artifact.id === id ||
@@ -1396,6 +1647,8 @@ export class ResearchCopilot
       sources: this.sources,
       cardToken: this.cardToken,
       selectedSource: this.selectedSource,
+      timing: this.timing,
+      cachedCompletions: this.writeCache.size,
       lastInlineRequest: this.lastInlineRequest,
     };
   }
@@ -1435,6 +1688,7 @@ export function activate(context: vscode.ExtensionContext) {
       configure: () => controller.configure(),
       apiKey: () => controller.apiKey(),
       grokApiKey: () => controller.apiKey("grok"),
+      clearCache: () => controller.clearCache(),
       showCard: () => controller.showCard(),
       referenceAction: (token, id, lock) =>
         controller.referenceAction(token, id, lock),
@@ -1456,6 +1710,7 @@ export function activate(context: vscode.ExtensionContext) {
     getState: () => controller.getState(),
     ready: () => controller.ensureIndex(),
     suggest: (question?: string) => controller.suggest(question),
+    complete: () => controller.suggest(undefined, false, false),
     setMode: (mode: Mode) => controller.setMode(mode),
   };
 }

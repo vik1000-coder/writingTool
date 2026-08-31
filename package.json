@@ -2,7 +2,7 @@
   "name": "research-copilot",
   "displayName": "Research Copilot",
   "description": "Local-first LaTeX writing assistance with inspectable scientific evidence.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "research-copilot",
   "private": true,
   "license": "MIT",
@@ -125,6 +125,10 @@
       {
         "command": "researchCopilot.showCard",
         "title": "Research Copilot: Show Suggestion Card"
+      },
+      {
+        "command": "researchCopilot.clearCache",
+        "title": "Research Copilot: Clear Suggestion Cache"
       }
     ],
     "keybindings": [
@@ -231,6 +235,16 @@
           "type": "string",
           "default": "grok-4.6",
           "description": "xAI model ID supporting structured outputs. Used only with the Grok backend."
+        },
+        "researchCopilot.grokWriteModel": {
+          "type": "string",
+          "default": "grok-4.3",
+          "description": "Low-latency xAI model for WRITE. Grok 4.3 runs with reasoning effort none."
+        },
+        "researchCopilot.cacheSuggestions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Keep a bounded two-minute session-memory cache of validated WRITE completions. Exact context and source hashes must match."
         }
       }
     }

@@ -116,7 +116,16 @@ export interface ResearchRequest {
   signal?: AbortSignal;
 }
 export type ResearchEvent =
-  { type: "status"; text: string } | { type: "result"; value: unknown };
+  | { type: "status"; text: string }
+  | {
+      type: "result";
+      value: unknown;
+      usage?: {
+        inputTokens: number;
+        cachedInputTokens: number;
+        outputTokens: number;
+      };
+    };
 export interface ResearchModelBackend {
   suggest(request: ResearchRequest): AsyncIterable<ResearchEvent>;
   dispose(): void;

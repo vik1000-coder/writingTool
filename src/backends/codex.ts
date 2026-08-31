@@ -1,5 +1,5 @@
 import { JsonLineClient, type RpcMessage } from "./rpc";
-import { OUTPUT_SCHEMA } from "../core/integrity";
+import { schemaForMode } from "../core/integrity";
 import type {
   ResearchModelBackend,
   ResearchRequest,
@@ -212,7 +212,7 @@ export class CodexBackend implements ResearchModelBackend {
             input: [{ type: "text", text: request.prompt }],
             approvalPolicy: "never",
             sandboxPolicy: { type: "readOnly", networkAccess: false },
-            outputSchema: OUTPUT_SCHEMA,
+            outputSchema: schemaForMode(request.context.mode),
           },
           { signal: request.signal },
         )

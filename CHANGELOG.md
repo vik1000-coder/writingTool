@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 — 2026-08-31
+
+- Reduce the live Grok WRITE path from a measured 23.4 seconds to 0.94 seconds on the synthetic smoke task by using Grok 4.3 with reasoning disabled and a compact four-field output contract.
+- Add a bounded, session-only WRITE completion cache that safely reuses exact contexts and matching typed prefixes after revalidating source hashes.
+- Coalesce concurrent identical completion requests and expose an explicit cache-clear command; explicit regeneration always bypasses the cache.
+- Arrange stable xAI message prefixes and pass a per-session conversation ID for provider prompt caching, while reporting cached token usage when xAI returns it.
+- Cache local file digests by strong stat signatures so repeated freshness validation avoids rereading unchanged evidence; unsaved or changed sources fail closed.
+- Add TDD coverage for TTL/LRU/byte bounds, compact WRITE contracts, source invalidation, partial numeric suffixes, concurrency, regeneration, and real-host cache behavior.
+
 ## 0.2.0 — 2026-08-31
 
 - Add Grok/xAI API support with SecretStorage keys, separate consent, model selection setting, and optional WRITE-only routing.

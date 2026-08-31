@@ -22,7 +22,7 @@ After dependency setup, run these commands in the clone to build and install:
 
 ```sh
 npm run package
-code --install-extension research-copilot-0.2.0.vsix
+code --install-extension research-copilot-0.2.1.vsix
 ```
 
 Alternatively, use **Install from VSIX…** in VS Code's Extensions view menu and select the package file. Open your research folder in the installed extension's window and configure its runtime paths below. This installs locally; it does not publish anything. Compile your manuscript with your normal LaTeX tools; compilation is not part of this extension.
@@ -65,12 +65,12 @@ The adapter calls the Responses API with a strict JSON schema and `store: false`
 1. Run **Research Copilot: Set Grok API Key** from the command palette (or choose **Set Grok API key** in **Check Local Setup**).
 2. Paste your xAI key into the masked input. It is saved in VS Code SecretStorage, never project settings or request logs. Submit an empty value to remove it. Do not paste keys into Chat or commit them to Git.
 3. Choose **Use Grok for all modes**, **Use Grok for WRITE only**, or **Keep current backend**. This changes routing for the open workspace only; it does not make a model request.
-4. The default `grokModel` is `grok-4.6`. Change it to another model available to your xAI account that supports structured outputs if needed.
+4. Research modes default to `grokModel: "grok-4.6"`. WRITE defaults separately to `grokWriteModel: "grok-4.3"`, where the adapter disables reasoning and requests only the four fields needed for a safe continuation.
 5. Request a suggestion and approve sending selected context to **Grok / xAI API**. This consent is separate from Codex/OpenAI consent and lasts for the current project/backend session.
 
 For manual routing, set `researchCopilot.backend` to `grok` and `researchCopilot.writeBackend` to `same`. To keep Codex for guidance and use Grok for ghost text, use `backend: "codex"` and `writeBackend: "grok"`.
 
-The adapter sends bounded text context to the fixed `https://api.x.ai/v1/chat/completions` endpoint with bearer authentication and a strict JSON schema, following [xAI structured-output documentation](https://docs.x.ai/developers/model-capabilities/text/structured-outputs). It does not enable web/X search, code execution, or other model tools. API usage is billed by xAI; chat subscriptions do not substitute for API credentials or credits. Provider retention policies still apply. The normal tests use fixtures, not paid Grok inference.
+The adapter sends bounded text context to the fixed `https://api.x.ai/v1/chat/completions` endpoint with bearer authentication and a strict JSON schema, following [xAI structured-output documentation](https://docs.x.ai/developers/model-capabilities/text/structured-outputs). Stable project evidence is placed before changing cursor context and an opaque per-session conversation ID enables [xAI prompt caching](https://docs.x.ai/developers/advanced-api-usage/prompt-caching); provider cache hits remain controlled by xAI. It does not enable web/X search, code execution, or other model tools. API usage is billed by xAI; chat subscriptions do not substitute for API credentials or credits. Provider retention policies still apply. The normal tests use fixtures, not paid Grok inference.
 
 ### Optional local model backend
 
@@ -92,6 +92,12 @@ No model download or server launch is performed by the extension. Confirm that y
 
 `researchCopilot.writeBackend` defaults to `same`. For example, use `backend: "codex"` and `writeBackend: "local"` with a configured local model to keep WRITE requests on that server while other modes and Chat use Codex. Each selected provider needs its own setup; this is routing, not automatic fallback when a provider fails.
 
+### WRITE completion cache
+
+With `cacheSuggestions` enabled, a validated WRITE response stays only in extension-process memory for at most two minutes. The cache holds at most 32 entries and 2 MiB. A hit requires the same workspace, manuscript URI, provider, model, context budget, complete text before and after the cursor, and unchanged source hashes. If you type the beginning of the offered text exactly, only the untyped suffix is reused. A source edit, configuration change, index reset, workspace change, expiry, or extension shutdown invalidates the relevant data. Unsaved result/reference/code edits invalidate all WRITE entries.
+
+Automatic and native inline requests may use this cache. **Suggest / Regenerate** deliberately makes a fresh model request. Run **Research Copilot: Clear Suggestion Cache** to erase the session entries immediately, or disable `cacheSuggestions`. Cache hits make no provider request and therefore consume no API tokens; the provider may separately cache prefixes for requests that do reach xAI.
+
 ## Settings reference
 
 All names below start with `researchCopilot.`.
@@ -105,6 +111,7 @@ All names below start with `researchCopilot.`.
 | `model` | `""` | Codex model ID; blank leaves the choice to Codex. |
 | `openaiModel` | `""` | Required model ID when the API backend is selected. |
 | `grokModel` | `"grok-4.6"` | xAI model supporting structured outputs, used when Grok is selected. |
+| `grokWriteModel` | `"grok-4.3"` | xAI model used for WRITE; the default runs with reasoning effort `none`. |
 | `localModel` | `""` | Required installed model ID when the local backend is selected. |
 | `localEndpoint` | `"http://127.0.0.1:11434/v1"` | Loopback server base URL, normally including `/v1`. |
 | `automaticSuggestions` | `false` | Enable debounced GUIDE, WRITE, and EVIDENCE triggers. |
@@ -112,6 +119,7 @@ All names below start with `researchCopilot.`.
 | `contextBudget` | `24000` | Serialized context budget, 4,000–100,000 characters. Not a token count or a limit on the entire prompt. |
 | `diagnostics` | `true` | Show evidence warnings in the manuscript editor. Disabling presentation does not disable integrity checks. |
 | `logRequests` | `false` | Write local request/response logs, which may contain unpublished research. |
+| `cacheSuggestions` | `true` | Keep exact validated WRITE completions in the bounded session-memory cache. |
 
 The context budget covers the context packet, not the additional instructions, explicit question, or bounded Chat history. Individual artifacts are already bounded excerpts or row blocks; context selection includes each indexed block whole or omits it. It does not promise to send whole files. Large pins can still be omitted with a warning.
 

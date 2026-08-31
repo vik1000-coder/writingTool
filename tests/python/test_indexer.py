@@ -5,9 +5,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'python'))
 from research_indexer import Index, parse_bibtex
+import research_indexer
 
 
 class IndexTests(unittest.TestCase):
@@ -25,6 +27,20 @@ class IndexTests(unittest.TestCase):
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text, encoding='utf-8')
         return p
+
+    def test_freshness_digest_cache_avoids_repeat_reads_but_rechecks_rewrites_and_deletion(self):
+        p = self.write('results/data.csv', 'ess\n42\n')
+        self.index.scan()
+        with patch('research_indexer.digest', wraps=research_indexer.digest) as hashed:
+            for _ in range(5):
+                self.assertIsNotNone(self.index.get('result:results/data.csv'))
+            self.assertLessEqual(hashed.call_count, 1)
+            stamp = p.stat()
+            p.write_text('ess\n99\n')
+            os.utime(p, ns=(stamp.st_atime_ns,stamp.st_mtime_ns))
+            self.assertIsNone(self.index.get('result:results/data.csv'), 'Same-size rewrite with restored mtime must still invalidate')
+            p.unlink()
+            self.assertIsNone(self.index.get('result:results/data.csv'))
 
     def test_csv_exact_rows_statistics_bom_and_quoted_fields(self):
         self.write('data/sweep.csv', '\ufeffmethod,ess,note\na,42,"quoted, value"\nb,7,"two\nlines"\n')

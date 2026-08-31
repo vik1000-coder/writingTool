@@ -2,7 +2,75 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { HttpBackend, localEndpoint } from "../src/backends/http";
-import { assembleContext } from "../src/core/context";
+import { assembleContext, buildPrompt } from "../src/core/context";
+test("Grok WRITE uses compact output, no reasoning on the fast profile, and cacheable stable messages", async (t) => {
+  const context = assembleContext({
+    mode: "write",
+    path: "main.tex",
+    text: "We show",
+    offset: 7,
+    artifacts: [],
+    budget: 4000,
+  });
+  const bodies: any[] = [];
+  t.mock.method(
+    globalThis,
+    "fetch",
+    async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(init.body as string);
+      bodies.push(body);
+      assert.equal(
+        (init.headers as any)["x-grok-conv-id"],
+        "synthetic-session",
+      );
+      assert.equal(body.reasoning_effort, "none");
+      assert.deepEqual(body.response_format.json_schema.schema.required, [
+        "insert_text",
+        "evidence_ids",
+        "citation_keys",
+        "claims",
+      ]);
+      assert.equal(body.messages[0].role, "system");
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content:
+                  '{"insert_text":" a difference.","evidence_ids":[],"citation_keys":[],"claims":[]}',
+              },
+            },
+          ],
+          usage: {
+            prompt_tokens: 100,
+            prompt_tokens_details: { cached_tokens: 75 },
+          },
+        }),
+      );
+    },
+  );
+  const backend = new HttpBackend({
+    kind: "grok",
+    model: "grok-4.3",
+    apiKey: "synthetic-key",
+    cacheSession: "synthetic-session",
+  });
+  for (let i = 0; i < 2; i++) {
+    const events = [];
+    for await (const event of backend.suggest({
+      context,
+      prompt: buildPrompt(context),
+    }))
+      events.push(event);
+    assert.equal((events.at(-1) as any).usage.cachedInputTokens, 75);
+    context.current.before += " more";
+  }
+  assert.deepEqual(
+    bodies[0].messages.slice(0, 2),
+    bodies[1].messages.slice(0, 2),
+  );
+  assert.notDeepEqual(bodies[0].messages[2], bodies[1].messages[2]);
+});
 test("cloud adapters reject malformed keys, refused/malformed output and oversized responses", async (t) => {
   const context = assembleContext({
     mode: "guide",

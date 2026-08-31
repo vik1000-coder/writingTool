@@ -283,6 +283,58 @@ export async function run() {
       original,
       "WRITE must not insert before acceptance",
     );
+    const generatedCalls = callCount;
+    await api.setMode("write");
+    await Promise.all([api.complete(), api.complete()]);
+    assert.equal(
+      callCount,
+      generatedCalls,
+      "Exact cached completion must avoid model inference",
+    );
+    assert.equal(api.getState().timing.source, "cache");
+    const partial = "with progressive ESS reaching 4";
+    await editor.edit((edit) => edit.insert(doc.positionAt(at), partial));
+    editor.selection = new vscode.Selection(
+      doc.positionAt(at + partial.length),
+      doc.positionAt(at + partial.length),
+    );
+    await delay(50);
+    await api.complete();
+    assert.equal(
+      api.getState().ghost?.text,
+      "2.",
+      "Only the untyped suffix should ghost, including a partially typed grounded number",
+    );
+    assert.equal(
+      callCount,
+      generatedCalls,
+      "Typing a matching prefix must not call the model",
+    );
+    console.log(
+      `PASS cached WRITE and typed suffix: ${JSON.stringify(api.getState().timing)}`,
+    );
+    await undoFixture(doc, original);
+    editor = await vscode.window.showTextDocument(doc);
+    editor.selection = new vscode.Selection(
+      doc.positionAt(at),
+      doc.positionAt(at),
+    );
+    await delay(50);
+    await vscode.commands.executeCommand("researchCopilot.clearCache");
+    hold = 100;
+    await Promise.all([api.complete(), api.complete()]);
+    hold = 0;
+    assert.equal(
+      callCount,
+      generatedCalls + 1,
+      "Concurrent identical misses must share one model call",
+    );
+    await api.suggest();
+    assert.equal(
+      callCount,
+      generatedCalls + 2,
+      "Explicit regeneration bypasses the cache",
+    );
     await vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
     await delay(400);
     assert.equal(
@@ -409,6 +461,11 @@ export async function run() {
     dirtyEdit.insert(sourceDoc.uri, new vscode.Position(0, 0), "UNSAVED,");
     await vscode.workspace.applyEdit(dirtyEdit);
     await until(() => sourceDoc.isDirty, "Source document must be dirty");
+    assert.equal(
+      api.getState().cachedCompletions,
+      0,
+      "Editing any non-manuscript source must invalidate WRITE completions",
+    );
     assert.equal(
       api.getState().selectedSource,
       undefined,

@@ -33,6 +33,8 @@ Use the mode selector in the sidebar or **Research Copilot: Select Assistance Mo
 
 For WRITE, keep the manuscript editor focused and request a continuation. **Tab** accepts the native inline suggestion; **Esc** dismisses it. Accepting is an ordinary editor change: **Undo** reverses it. A suggestion card with an evidence warning may appear without insertable ghost text. Check the warning rather than assuming it was accepted.
 
+WRITE keeps a small two-minute session cache by default. Reopening the exact cursor context, or typing an exact prefix of the offered continuation, can show the remaining ghost text without another model call. The full surrounding document, provider/model, and every source hash must still match. Explicit **Suggest / Regenerate** bypasses the cache. Use **Clear Suggestion Cache** when you want to remove it immediately; it never changes the manuscript.
+
 Use **Research Copilot: Cancel Suggestion** or the sidebar's Cancel button to stop a pending request. Moving the cursor, editing the document, or changing modes invalidates outdated suggestions.
 
 Automatic requests are optional. Enable `researchCopilot.automaticSuggestions` only if desired: GUIDE triggers after a sentence ending, WRITE after a pause with text before the cursor, and EVIDENCE after a paragraph break. The default delay is 1,800 ms. FIGURE / TABLE and STRUCTURE stay explicit. OFF suppresses all automatic requests. A cloud backend still requires an initial explicit request and consent.
@@ -207,6 +209,7 @@ Open the command palette with **Cmd+Shift+P** / **Ctrl+Shift+P**. All commands b
 | Configure Project | Open or create the optional project configuration template. |
 | Set Grok API Key | Store/remove the xAI key securely and choose Grok routing for this workspace. |
 | Show Suggestion Card | Reopen the current GUIDE hover in the manuscript editor. |
+| Clear Suggestion Cache | Remove all session-only cached WRITE continuations without changing files. |
 | Set OpenAI API Key | Store an API key in VS Code SecretStorage; submit an empty value to remove it. |
 | Inspect Last Request | Open the exact last request and available response/validation details. |
 | Review Proposed Edit | Open a proposed manuscript edit as a diff. |

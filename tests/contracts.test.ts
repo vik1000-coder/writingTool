@@ -4,6 +4,7 @@ import {
   validateSuggestion,
   resolveSuggestion,
   OUTPUT_SCHEMA,
+  schemaForMode,
 } from "../src/core/integrity";
 import { assembleContext } from "../src/core/context";
 import { prepareEdit } from "../src/core/edits";
@@ -31,6 +32,38 @@ const artifact = (extra: Partial<Artifact>): Artifact => ({
   locator: { rows: [1, 2], columns: ["ess"] },
   metadata: { rows: [{ ess: 42 }, { ess: 7 }] },
   ...extra,
+});
+test("compact WRITE output keeps evidence/citation/numeric gates with no research-card overhead", () => {
+  assert.deepEqual(Object.keys(schemaForMode("write").properties), [
+    "insert_text",
+    "evidence_ids",
+    "citation_keys",
+    "claims",
+  ]);
+  const compact = {
+    insert_text: "with ESS reaching 42.",
+    evidence_ids: [artifact({}).id],
+    citation_keys: [],
+    claims: [
+      {
+        value: "42",
+        artifact_id: artifact({}).id,
+        source_hash: "current-hash",
+        row: 1,
+        column: "ess",
+      },
+    ],
+  };
+  const parsed = validateSuggestion(compact, "write");
+  assert.equal(parsed.mode, "write");
+  assert.equal(resolveSuggestion(parsed, [artifact({})]).insertable, true);
+  assert.equal(
+    resolveSuggestion(validateSuggestion({ ...compact, claims: [] }, "write"), [
+      artifact({}),
+    ]).insertable,
+    false,
+  );
+  assert.throws(() => validateSuggestion(compact, "guide"));
 });
 
 test("mode contracts reject unexpected prose, giant continuations, unknown modes, and edits outside Chat", () => {

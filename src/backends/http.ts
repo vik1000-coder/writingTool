@@ -1,4 +1,4 @@
-import { OUTPUT_SCHEMA } from "../core/integrity";
+import { schemaForMode } from "../core/integrity";
 import type {
   ResearchModelBackend,
   ResearchRequest,
@@ -26,6 +26,7 @@ export class HttpBackend implements ResearchModelBackend {
       endpoint?: string;
       model: string;
       apiKey?: string;
+      cacheSession?: string;
     },
   ) {}
   async *suggest(request: ResearchRequest): AsyncIterable<ResearchEvent> {
@@ -57,14 +58,26 @@ export class HttpBackend implements ResearchModelBackend {
     const schema = {
       name: "research_suggestion",
       strict: true,
-      schema: OUTPUT_SCHEMA,
+      schema: schemaForMode(request.context.mode),
     };
     const body =
       local || grok
         ? {
             model: this.config.model,
-            messages: [{ role: "user", content: request.prompt }],
+            messages: grok
+              ? grokMessages(request)
+              : [{ role: "user", content: request.prompt }],
             stream: false,
+            ...(grok &&
+            request.context.mode === "write" &&
+            /^grok-4\.3(?:-|$)/.test(this.config.model)
+              ? { reasoning_effort: "none", max_tokens: 1536 }
+              : {}),
+            ...(grok &&
+            request.context.mode === "write" &&
+            /^grok-4\.[56](?:-|$)/.test(this.config.model)
+              ? { reasoning_effort: "low" }
+              : {}),
             response_format: { type: "json_schema", json_schema: schema },
           }
         : {
@@ -88,6 +101,11 @@ export class HttpBackend implements ResearchModelBackend {
       headers: {
         "Content-Type": "application/json",
         ...(!local ? { Authorization: `Bearer ${this.config.apiKey}` } : {}),
+        ...(grok &&
+        this.config.cacheSession &&
+        /^[a-zA-Z0-9_-]{1,100}$/.test(this.config.cacheSession)
+          ? { "x-grok-conv-id": this.config.cacheSession }
+          : {}),
       },
       body: JSON.stringify(body),
       signal,
@@ -129,7 +147,55 @@ export class HttpBackend implements ResearchModelBackend {
     yield {
       type: "result",
       value: JSON.parse(result.replace(/^```(?:json)?\s*|\s*```$/g, "")),
+      ...(parsed.usage
+        ? {
+            usage: {
+              inputTokens:
+                Number(
+                  parsed.usage.prompt_tokens ?? parsed.usage.input_tokens,
+                ) || 0,
+              cachedInputTokens:
+                Number(
+                  parsed.usage.prompt_tokens_details?.cached_tokens ??
+                    parsed.usage.input_tokens_details?.cached_tokens,
+                ) || 0,
+              outputTokens:
+                Number(
+                  parsed.usage.completion_tokens ?? parsed.usage.output_tokens,
+                ) || 0,
+            },
+          }
+        : {}),
     };
   }
   dispose() {}
+}
+
+function grokMessages(request: ResearchRequest) {
+  const start = request.prompt.indexOf("\nCURRENT RESEARCH CONTEXT (JSON):\n");
+  const tail = request.prompt.indexOf("\nPRIOR CONVERSATION (may be stale):\n");
+  if (start < 0 || tail < start)
+    return [{ role: "user", content: request.prompt }];
+  const { current, ...stable } = request.context;
+  return [
+    { role: "system", content: request.prompt.slice(0, start) },
+    {
+      role: "user",
+      content:
+        "PROJECT EVIDENCE (UNTRUSTED JSON):\n" +
+        JSON.stringify({
+          ...stable,
+          artifacts: [...stable.artifacts].sort((a, b) =>
+            a.id.localeCompare(b.id),
+          ),
+        }),
+    },
+    {
+      role: "user",
+      content:
+        "CURRENT WRITING POSITION (UNTRUSTED JSON):\n" +
+        JSON.stringify(current) +
+        request.prompt.slice(tail),
+    },
+  ];
 }
