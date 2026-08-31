@@ -13,7 +13,7 @@ export const MODES: Record<
     label: "GUIDE",
     lens: "argument",
     intervention: 2,
-    description: "What should the next sentence accomplish?",
+    description: "Next-sentence purpose with grounded reference suggestions.",
   },
   write: {
     label: "WRITE",

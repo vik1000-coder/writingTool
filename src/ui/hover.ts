@@ -1,6 +1,17 @@
 import * as vscode from "vscode";
 import type { ResolvedSuggestion } from "../core/types";
-import type { SourceCard } from "../core/cards";
+import { suggestedReferences, type SourceCard } from "../core/cards";
+
+const titleAttribute = (value: string) =>
+  value
+    .replace(/\s*\n+\s*/g, " — ")
+    .slice(0, 900)
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+const shortTitle = (value: string) =>
+  value.length > 32 ? value.slice(0, 31) + "…" : value;
 
 export class SuggestionHover implements vscode.Disposable {
   private decoration = vscode.window.createTextEditorDecorationType({
@@ -54,44 +65,37 @@ export class SuggestionHover implements vscode.Disposable {
     markdown.appendText(result.suggestion.title);
     markdown.appendMarkdown("**\n\n");
     markdown.appendText(result.suggestion.text.slice(0, 600));
-    for (const s of sources.slice(0, 1)) {
-      markdown.appendMarkdown("\n\n---\n\n**");
-      markdown.appendText(s.artifact.title);
-      markdown.appendMarkdown("**\n\n");
+    const references = suggestedReferences(sources);
+    if (references.length) {
+      markdown.appendMarkdown("\n\n---\n\n**Suggested references**\n\n");
+      markdown.appendText(
+        "Hover ⓘ for the AI summary and why the source fits; select it to open the exact local source.",
+      );
+    }
+    for (const [index, s] of references.entries()) {
+      markdown.appendMarkdown("\n\n");
+      markdown.appendText(`${index + 1}. ${s.artifact.title}`);
+      markdown.appendMarkdown("\n\n");
       markdown.appendText(
         s.artifact.path +
           (s.artifact.locator.page ? ` · p. ${s.artifact.locator.page}` : ""),
       );
-      markdown.appendMarkdown("\n\n**Summary · AI interpretation**\n\n");
-      markdown.appendText(
-        s.summary.length > 350 ? s.summary.slice(0, 350) + "…" : s.summary,
-      );
-      markdown.appendMarkdown("\n\n**Why here · AI interpretation**\n\n");
-      markdown.appendText(
-        s.relevance.length > 350
-          ? s.relevance.slice(0, 350) + "…"
-          : s.relevance,
-      );
-      if (s.artifact.kind === "bib")
-        markdown.appendText(
-          "\n\nCitation candidate — no exact full-text quotation selected.",
-        );
       markdown.appendMarkdown("\n\n");
-      for (const [label, lock] of [
-        ["View source", false],
-        ["Lock reference", true],
+      for (const [label, lock, tooltip] of [
+        ["ⓘ details", false, s.details],
+        ["Lock reference", true, "Hold this exact local source while writing"],
       ] as const) {
         const args = encodeURIComponent(
           JSON.stringify([token, s.artifact.id, lock]),
         );
         markdown.appendMarkdown(
-          `  [${label}](command:researchCopilot.referenceAction?${args})`,
+          `  [${label}](command:researchCopilot.referenceAction?${args} "${titleAttribute(tooltip)}")`,
         );
       }
     }
-    if (sources.length > 1)
+    if (sources.length > references.length)
       markdown.appendText(
-        `\n\n${sources.length - 1} more sources in the Suggestion panel.`,
+        `\n\n${sources.length - references.length} other supporting source(s) are available in Evidence.`,
       );
     for (const warning of result.warnings.slice(0, 3))
       markdown.appendText(`\n\nWarning: ${warning}`);
@@ -105,12 +109,18 @@ export class SuggestionHover implements vscode.Disposable {
       position,
       markdown,
     };
+    const inlineReferences = references
+      .slice(0, 2)
+      .map((source) => shortTitle(source.artifact.title));
+    const inlineTopic = result.suggestion.title
+      .replace(/\s+/g, " ")
+      .slice(0, inlineReferences.length ? 48 : 65);
     editor.setDecorations(this.decoration, [
       {
         range: new vscode.Range(position, position),
         renderOptions: {
           after: {
-            contentText: `◇ ${result.suggestion.title.replace(/\s+/g, " ").slice(0, 65)}`,
+            contentText: `◇ ${inlineTopic}${inlineReferences.length ? ` · refs: ${inlineReferences.join("; ")}` : ""}`,
           },
         },
       },

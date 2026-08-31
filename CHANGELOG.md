@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2 — 2026-08-31
+
+- Put up to three grounded reference suggestions alongside each GUIDE topic in the native editor card and sidebar.
+- Show reference titles at a glance in the editor marker and provide bounded hover/focus details with the AI summary, relevance explanation, and local locator.
+- Prefer current PDF passages, deduplicate matching bibliography metadata, and avoid weak reference padding when no source fits.
+- Keep exact quotations out of tooltips; viewing or locking a reference resolves the current local source in the left panel through stale-token and source-hash checks.
+- Add TDD coverage for reference selection, prompt behavior, hostile tooltip text, keyboard focus, native hover contents, and real extension-host actions.
+
 ## 0.2.1 — 2026-08-31
 
 - Reduce the live Grok WRITE path from a measured 23.4 seconds to 0.94 seconds on the synthetic smoke task by using Grok 4.3 with reasoning disabled and a compact four-field output contract.

@@ -1,6 +1,6 @@
 # Security and privacy
 
-Research Copilot is an early local-first VS Code extension. The current maintained version is 0.2.1; there is no security response SLA or independent security certification. Do not assume local indexing alone makes cloud inference appropriate for confidential research.
+Research Copilot is an early local-first VS Code extension. The current maintained version is 0.2.2; there is no security response SLA or independent security certification. Do not assume local indexing alone makes cloud inference appropriate for confidential research.
 
 ## Data and capabilities
 

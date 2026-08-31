@@ -192,3 +192,91 @@ test("locked source shows highlighted local quote and separate AI notes without 
   );
   dom.window.close();
 });
+
+test("GUIDE keeps reference titles beside the topic with safe hover and focus details", () => {
+  const dom = new JSDOM(html, { runScripts: "outside-only" });
+  const messages: any[] = [];
+  (dom.window as any).acquireVsCodeApi = () => ({
+    getState: () => ({}),
+    setState: () => {},
+    postMessage: (m: any) => messages.push(m),
+  });
+  dom.window.eval(readFileSync("media/sidebar.js", "utf8"));
+  const malicious = '<img src=x onerror="globalThis.compromised=true">';
+  const reference = (id: string, title: string) => ({
+    artifact: {
+      id,
+      kind: "pdf",
+      path: `${id}.pdf`,
+      title,
+      text: "Exact local quote",
+      hash: "h",
+      locator: { page: 2 },
+      metadata: {},
+    },
+    summary: `Relevant summary ${malicious}`,
+    relevance: "It supplies the conceptual contrast needed next.",
+    details:
+      `Source · ${title}\nLocation · ${id}.pdf · p. 2\n` +
+      `Summary · AI interpretation\nRelevant summary ${malicious}\n` +
+      "Why suggested here · AI interpretation\nIt supplies the conceptual contrast needed next.",
+  });
+  const guideReferences = [
+    reference("pdf:one", "First paper"),
+    reference("pdf:two", "Second paper"),
+  ];
+  dom.window.dispatchEvent(
+    new dom.window.MessageEvent("message", {
+      data: {
+        type: "state",
+        state: {
+          mode: "guide",
+          cardToken: "current-token",
+          guideReferences,
+          result: {
+            suggestion: {
+              mode: "guide",
+              title: "Frame the conceptual contrast",
+              text: "Explain which mechanism distinguishes the approaches.",
+              insert_text: "",
+              proposal: null,
+              edit: null,
+            },
+            evidence: guideReferences.map((s) => s.artifact),
+            warnings: [],
+            insertable: false,
+          },
+        },
+      },
+    }),
+  );
+  const suggestions = [
+    ...dom.window.document.querySelectorAll(".reference-suggestion"),
+  ];
+  assert.equal(suggestions.length, 2);
+  assert.ok(
+    dom.window.document
+      .querySelector(".guide-reference-strip")!
+      .textContent!.includes("Suggested references"),
+  );
+  const firstButton = suggestions[0].querySelector(
+    "button",
+  ) as HTMLButtonElement;
+  const tooltip = suggestions[0].querySelector(
+    '[role="tooltip"]',
+  ) as HTMLElement;
+  assert.equal(firstButton.textContent, "First paper");
+  assert.equal(firstButton.getAttribute("aria-describedby"), tooltip.id);
+  assert.match(tooltip.textContent!, /Why suggested here · AI interpretation/);
+  assert.ok(tooltip.textContent!.includes(malicious));
+  assert.equal(dom.window.document.querySelectorAll("img").length, 0);
+  firstButton.click();
+  assert.deepEqual(JSON.parse(JSON.stringify(messages.at(-1))), {
+    type: "reference",
+    token: "current-token",
+    id: "pdf:one",
+    lock: false,
+  });
+  assert.equal((dom.window as any).compromised, undefined);
+  dom.window.close();
+});

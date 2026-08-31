@@ -25,7 +25,7 @@ Use the mode selector in the sidebar or **Research Copilot: Select Assistance Mo
 | Mode | When to use it | What happens |
 | --- | --- | --- |
 | OFF | You want to write without proactive assistance | Suggestions are suppressed; explicit Chat questions still work. |
-| GUIDE | You know the topic but want help deciding the next move | Shows a floating editor card with the next topic/purpose, a reference summary, and why it fits; no prose is inserted. |
+| GUIDE | You know the topic but want help deciding the next move | Shows a floating editor card with the next topic/purpose plus up to three grounded reference suggestions and detail tooltips; no prose is inserted. |
 | WRITE | You want a short continuation at the cursor | Offers native ghost text, at most two sentences / 600 characters, subject to evidence checks. |
 | EVIDENCE | You want to check a claim against your sources | Shows locally resolved passages, results, and missing-support warnings. |
 | FIGURE / TABLE | You are deciding how to present a result | Proposes a figure, table, or no visualization using indexed project artifacts. It does not generate a plot. |
@@ -41,11 +41,11 @@ Automatic requests are optional. Enable `researchCopilot.automaticSuggestions` o
 
 ## GUIDE cards and locked references
 
-Choose **GUIDE** for a floating suggestion card, or **WRITE** for native ghost text. In GUIDE, an explicit request opens a native VS Code hover near your cursor. The small ◇ marker shows the suggested topic; hover over it or run **Research Copilot: Show Suggestion Card** to reopen the box. Automatic GUIDE requests update the marker without taking keyboard focus. Typing or moving the cursor removes the outdated card; request again for the new location.
+Choose **GUIDE** for a floating suggestion card, or **WRITE** for native ghost text. In GUIDE, an explicit request opens a native VS Code hover near your cursor. The small ◇ marker shows the suggested topic and up to two reference titles at a glance; hover over it or run **Research Copilot: Show Suggestion Card** to reopen the box. Automatic GUIDE requests update the marker without taking keyboard focus. Typing or moving the cursor removes the outdated card; request again for the new location.
 
-The compact box shows one source: its locally indexed title and path/page, a relevant **AI summary**, and **why here** (also an AI interpretation). Other sources and full summaries remain in the **Suggestion** panel. A topic-only suggestion works without a reference. Bibliography metadata alone is marked as a citation candidate, never presented as a verified full-text quote.
+The compact box shows up to three high-value references when the current local sources fit the topic. Each entry displays its locally indexed title and path/page. Hover **ⓘ details** in the editor card—or hover/focus the corresponding reference in the sidebar—for a bounded **AI summary** and **why suggested here** explanation. The sidebar keeps a short summary visible beside the topic. References are deduplicated by citation identity and prefer a selected local PDF passage over bibliography-only metadata. A topic-only suggestion remains valid when no source fits; the model is told not to pad the list with weak matches.
 
-- **View source** opens the exact selected passage in the left Research Copilot sidebar. For PDFs, the quotation is locally extracted text highlighted in the panel; the model never supplies that quotation.
+- **ⓘ details / a reference title** opens the exact selected passage in the left Research Copilot sidebar. For PDFs, the quotation is locally extracted text highlighted in the panel; tooltips contain bounded AI interpretation, never a model-supplied quotation.
 - **Lock reference** keeps that source visible at the top of the sidebar while you move through the manuscript, type, switch modes, or request another suggestion. The displayed relevance explains the original suggestion, not the new cursor position.
 - **Open highlighted PDF page** shows the original page with the selected passage highlighted. This remains available from the left panel.
 - **Unlock reference** closes the held source. Locks are session-only reading aids; use **Pin context** separately to prioritize a source in future requests.

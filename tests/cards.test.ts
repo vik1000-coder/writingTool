@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sourceCards } from "../src/core/cards";
+import { sourceCards, suggestedReferences } from "../src/core/cards";
 import { validateSuggestion, resolveSuggestion } from "../src/core/integrity";
 import type { Artifact } from "../src/core/types";
 const pdf: Artifact = {
@@ -51,6 +51,13 @@ test("source cards join local paper titles, separate AI notes from exact quotes,
   assert.equal(cards[0].artifact.text, pdf.text);
   assert.equal(cards[0].summary, response.source_notes[0].summary);
   assert.equal(cards[0].relevance, response.source_notes[0].relevance);
+  assert.match(cards[0].details, /Summary · AI interpretation/);
+  assert.match(cards[0].details, /Why suggested here · AI interpretation/);
+  assert.match(cards[0].details, /refs\/source\.pdf · p\. 1/);
+  assert.ok(
+    !cards[0].details.includes(pdf.text),
+    "Reference tooltip should explain the source without duplicating its exact quotation",
+  );
   assert.equal(sourceCards(resolveSuggestion(suggestion, []), []).length, 0);
   assert.throws(() =>
     validateSuggestion(
@@ -75,6 +82,43 @@ test("source cards join local paper titles, separate AI notes from exact quotes,
         "guide",
       ),
     /evidence/,
+  );
+});
+test("GUIDE reference suggestions prefer and deduplicate papers before other evidence", () => {
+  const resultCard = sourceCards(
+    resolveSuggestion(
+      validateSuggestion(
+        {
+          ...response,
+          evidence_ids: ["result:one", bib.id, pdf.id, "pdf:second#1"],
+          source_notes: [],
+        },
+        "guide",
+      ),
+      [
+        { ...pdf, id: "result:one", kind: "result", path: "run.csv" },
+        bib,
+        pdf,
+        {
+          ...pdf,
+          id: "pdf:second#1",
+          path: "refs/second.pdf",
+          title: "Second paper",
+          metadata: { citation_key: "second" },
+        },
+      ],
+    ),
+    [bib, pdf],
+  );
+  const suggested = suggestedReferences(resultCard, 3);
+  assert.deepEqual(
+    suggested.map((card) => card.artifact.id),
+    [pdf.id, "pdf:second#1"],
+  );
+  assert.deepEqual(
+    suggestedReferences([resultCard[0]]),
+    [],
+    "Empirical results stay in Evidence/Results instead of being mislabeled as references",
   );
 });
 test("bibliography-only and legacy responses never invent a quotation or summary", () => {

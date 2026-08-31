@@ -2,7 +2,7 @@
   "name": "research-copilot",
   "displayName": "Research Copilot",
   "description": "Local-first LaTeX writing assistance with inspectable scientific evidence.",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "publisher": "research-copilot",
   "private": true,
   "license": "MIT",

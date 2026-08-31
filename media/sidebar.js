@@ -26,7 +26,7 @@
   ];
   const descriptions = {
     off: "No proactive AI. Ask an explicit question in Chat.",
-    guide: "An intention for your next sentence. Your words, your voice.",
+    guide: "A next-sentence intention with grounded reference suggestions.",
     write: "A short continuation. Tab to accept; Esc to dismiss.",
     evidence: "Compare the current claim with local sources and data.",
     visual: "Choose the right presentation for your actual results.",
@@ -51,6 +51,54 @@
   }
   function warning(text) {
     return node("p", text, "warning");
+  }
+  function guideReferenceStrip(references) {
+    const strip = node("section", undefined, "guide-reference-strip");
+    strip.append(
+      node("h3", "Suggested references"),
+      node(
+        "p",
+        "Hover or focus a reference for its summary and why it fits here.",
+        "muted",
+      ),
+    );
+    references.slice(0, 3).forEach((reference, index) => {
+      const wrap = node("div", undefined, "reference-suggestion"),
+        tooltip = node(
+          "span",
+          reference.details ||
+            `Source · ${reference.artifact.title}\nSummary · AI interpretation\n${reference.summary}\nWhy suggested here · AI interpretation\n${reference.relevance}`,
+          "reference-tooltip",
+        ),
+        tooltipId = `guide-reference-${index}-details`,
+        open = button(
+          reference.artifact.title,
+          () =>
+            state.cardToken &&
+            send("reference", {
+              token: state.cardToken,
+              id: reference.artifact.id,
+              lock: false,
+            }),
+          "link reference-title",
+        );
+      tooltip.id = tooltipId;
+      tooltip.setAttribute("role", "tooltip");
+      open.setAttribute("aria-describedby", tooltipId);
+      if (!state.cardToken) open.disabled = true;
+      const summary = reference.summary || "No AI summary supplied.";
+      wrap.append(
+        open,
+        node(
+          "p",
+          summary.length > 120 ? summary.slice(0, 119) + "…" : summary,
+          "reference-summary",
+        ),
+        tooltip,
+      );
+      strip.append(wrap);
+    });
+    return strip;
   }
   function artifactsFor(kind) {
     return (state.catalog || state.artifacts || []).filter((a) =>
@@ -279,6 +327,8 @@
           node("h2", suggestion.title),
           node("p", suggestion.text || suggestion.insert_text, "prose"),
         );
+        if (suggestion.mode === "guide" && state.guideReferences?.length)
+          card.append(guideReferenceStrip(state.guideReferences));
         if (suggestion.insert_text) {
           card.append(
             node("pre", suggestion.insert_text),
@@ -315,34 +365,36 @@
         panel.append(card);
         if (suggestion.mode === "guide")
           panel.append(button("Show editor card", () => send("showCard")));
-        (state.sources || []).forEach((s) => {
-          const item = node("article", undefined, "card");
-          item.append(
-            node("h3", s.artifact.title),
-            node("p", s.summary),
-            node("small", "Summary · AI interpretation"),
-            node("p", `Why here: ${s.relevance}`),
-            node("small", "Relevance · AI interpretation"),
-          );
-          if (state.cardToken)
+        (suggestion.mode === "guide" ? [] : state.sources || []).forEach(
+          (s) => {
+            const item = node("article", undefined, "card");
             item.append(
-              button("View source", () =>
-                send("reference", {
-                  token: state.cardToken,
-                  id: s.artifact.id,
-                  lock: false,
-                }),
-              ),
-              button("Lock reference", () =>
-                send("reference", {
-                  token: state.cardToken,
-                  id: s.artifact.id,
-                  lock: true,
-                }),
-              ),
+              node("h3", s.artifact.title),
+              node("p", s.summary),
+              node("small", "Summary · AI interpretation"),
+              node("p", `Why here: ${s.relevance}`),
+              node("small", "Relevance · AI interpretation"),
             );
-          panel.append(item);
-        });
+            if (state.cardToken)
+              item.append(
+                button("View source", () =>
+                  send("reference", {
+                    token: state.cardToken,
+                    id: s.artifact.id,
+                    lock: false,
+                  }),
+                ),
+                button("Lock reference", () =>
+                  send("reference", {
+                    token: state.cardToken,
+                    id: s.artifact.id,
+                    lock: true,
+                  }),
+                ),
+              );
+            panel.append(item);
+          },
+        );
         resolved.warnings.forEach((w) => panel.append(warning(w)));
         if (resolved.evidence.length)
           panel.append(

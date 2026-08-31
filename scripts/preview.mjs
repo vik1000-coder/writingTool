@@ -17,8 +17,13 @@ const server = createServer(async (req, res) => {
       .messages[0].content.split("CURRENT RESEARCH CONTEXT (JSON):\n")[1]
       .split("\nPRIOR CONVERSATION")[0],
   );
-  const pdf = packet.artifacts.find(
-    (a) => a.kind === "pdf" && a.locator.page === 2,
+  const pdfs = packet.artifacts.filter(
+    (artifact, index, all) =>
+      artifact.kind === "pdf" &&
+      all.findIndex(
+        (candidate) =>
+          candidate.kind === "pdf" && candidate.path === artifact.path,
+      ) === index,
   );
   const result = packet.artifacts.find(
     (a) => a.kind === "result" && a.locator.rows?.includes(6),
@@ -34,18 +39,20 @@ const server = createServer(async (req, res) => {
       packet.mode === "write"
         ? "with the comparison becoming clearer under stronger constraints."
         : "",
-    evidence_ids: [pdf?.id, result?.id].filter(Boolean),
-    source_notes: pdf
-      ? [
-          {
-            artifact_id: pdf.id,
-            summary:
-              "The synthetic reference contrasts sampling approaches under stronger constraints and notes a runtime tradeoff.",
-            relevance:
-              "It supports the comparison you are developing here, while reminding you to discuss runtime before claiming efficiency.",
-          },
-        ]
-      : [],
+    evidence_ids: [...pdfs.slice(0, 2).map((pdf) => pdf.id), result?.id].filter(
+      Boolean,
+    ),
+    source_notes: pdfs.slice(0, 2).map((pdf, index) => ({
+      artifact_id: pdf.id,
+      summary:
+        index === 0
+          ? "The synthetic reference contrasts sampling approaches under stronger constraints."
+          : "The synthetic companion reference discusses runtime and robustness tradeoffs.",
+      relevance:
+        index === 0
+          ? "It supports the comparison you are developing here."
+          : "It suggests a limitation to address before claiming efficiency.",
+    })),
     outline_ids: [],
     citation_keys: [],
     claims: [],

@@ -23,7 +23,11 @@ import type {
 import { ProjectIndex, type ScanReport } from "./indexer";
 import { sidebarHtml } from "./ui/shell";
 import { showPdf } from "./ui/pdf";
-import { sourceCards, type SourceCard } from "./core/cards";
+import {
+  sourceCards,
+  suggestedReferences,
+  type SourceCard,
+} from "./core/cards";
 import { SuggestionHover } from "./ui/hover";
 import { CompletionCache } from "./core/completion-cache";
 
@@ -427,6 +431,7 @@ export class ResearchCopilot
         cardToken: this.cardToken,
         selectedSource: this.selectedSource,
         sourceFocus: this.sourceFocus,
+        guideReferences: suggestedReferences(this.sources),
         timing: this.timing,
         cachedCompletions: this.writeCache.size,
         context: this.contextPacket,
@@ -1647,6 +1652,7 @@ export class ResearchCopilot
       sources: this.sources,
       cardToken: this.cardToken,
       selectedSource: this.selectedSource,
+      guideReferences: suggestedReferences(this.sources),
       timing: this.timing,
       cachedCompletions: this.writeCache.size,
       lastInlineRequest: this.lastInlineRequest,

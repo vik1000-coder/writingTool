@@ -4,11 +4,11 @@ Validated on 31 August 2026. These are implementation checks, not evidence that 
 
 ## Automated checks
 
-- `npm run verify`: strict TypeScript, 31 TypeScript tests, 15 Python tests (including PDFium/Pillow and YAML), and the production bundle pass locally.
+- `npm run verify`: strict TypeScript, 34 TypeScript tests, 15 Python tests (including PDFium/Pillow and YAML), and the production bundle pass locally.
 - `npm run test:extension`: passes in a real VS Code 1.127 extension host with a disposable workspace, a deterministic loopback HTTP fixture, and the real Python helper. No cloud model is called by these tests.
-- Host coverage includes activation without inference, all six modes, read-only suggestions, grounded WRITE, invented-citation rejection, exact/partial WRITE cache hits, concurrent request coalescing, explicit regeneration, dirty-source cache invalidation, OFF with explicit Chat, diff review and explicit apply, stale-review rejection, unsaved-source omission, cancellation, evidence watchers, request inspection, sidebar activation, automatic debounce, and OFF suppression.
+- Host coverage includes activation without inference, all six modes, GUIDE topic/reference hover contents, grounded reference shortlists and current-token actions, read-only suggestions, grounded WRITE, invented-citation rejection, exact/partial WRITE cache hits, concurrent request coalescing, explicit regeneration, dirty-source cache invalidation, OFF with explicit Chat, diff review and explicit apply, stale-review rejection, unsaved-source omission, cancellation, evidence watchers, request inspection, sidebar activation, automatic debounce, and OFF suppression.
 - The Linux CI run exercised native inline acceptance and Undo in a focused Xvfb host. Native inline rendering/acceptance and Undo depend on OS window focus. The host suite checks them when focused; when a macOS background host cannot execute native editor commands, it reports that limitation and restores only its disposable fixtures. Manual checks cover native acceptance and Undo separately.
-- `npm run setup` prepares the repository's Python environment without modifying system Python. `vsce package --no-dependencies` produces a 134.67 KB VSIX including the user guides, with no node_modules, models, Python wheels, tests, or development dependencies.
+- `npm run setup` prepares the repository's Python environment without modifying system Python. `vsce package --no-dependencies` produces a 137.43 KB VSIX including the user guides, with no node_modules, models, Python wheels, tests, or development dependencies.
 - `npm audit --omit=dev`: no production dependency vulnerabilities reported (there are no production npm dependencies).
 
 The tests were developed alongside the implementation. New failing regressions led to fixes for stale or fabricated evidence, numeric-sign parsing, unsafe TeX directives, changed configuration, late CSV slices, outdated relationship confirmation, PDF highlight compositing, stale sidebar snapshots, cancellation before a Codex turn ID arrives, macOS path aliases creating duplicate editor buffers, and unsaved changes shifting section offsets.
@@ -17,7 +17,7 @@ The tests were developed alongside the implementation. New failing regressions l
 
 - Audited usage/configuration instructions against the sidebar, command manifest, parsers, provider adapters, and local storage behavior. All 18 user commands and all 16 setting defaults are documented.
 - Checked local Markdown links and anchors, parsed JSON/YAML examples, and syntax-checked shell examples. Exercised the documented project configuration, Markdown/YAML outlines, and BibTeX-to-PDF matching against the real indexer in a disposable copy of the synthetic study.
-- Re-ran `npm run package` (including all 46 core/indexer tests) and `npm run test:extension`. The macOS host passed, with its documented background-window limitation for native inline acceptance/Undo.
+- Re-ran `npm run package` (including all 49 core/indexer tests) and `npm run test:extension`. The macOS host passed, including native GUIDE reference contents and actions; its background-window limitation for native inline acceptance/Undo remains documented.
 - Inspected the resulting ZIP: all four user-guide files are included and match their repository sources; relative guide links resolve within the installed package. A dedicated guide index avoids relying on the root README filename, which the packager lowercases. Developer docs/screenshots remain in the repository rather than increasing the installed package.
 - Clarified subscription versus API setup, artifact versus file exclusions, Git discovery behavior, retrospective request inspection, manual outline/status management, and currently unimplemented features. No new live model inference was needed for this documentation audit.
 
@@ -40,6 +40,10 @@ The new native hover and left-side locked quotation were checked in a disposable
 ![Native GUIDE hover](screenshots/guide-hover.jpg)
 
 ![Locked exact quotation in the left sidebar](screenshots/locked-reference.jpg)
+
+## v0.2.2 GUIDE reference checks
+
+New failing tests preceded the reference-shortlist change. Unit coverage verifies PDF-first citation deduplication and bounded tooltip contents without exact quotation duplication. DOM coverage verifies two references appear alongside the topic, hostile titles/details render only as text, and hover/focus explanations remain keyboard accessible. The real extension host verifies the native card contains the suggested-reference section, detail tooltips, AI-interpretation labels, and a grounded source shortlist before exercising the existing exact-source lock lifecycle.
 
 ## Earlier visual checks
 

@@ -66,3 +66,11 @@ See [VALIDATION.md](VALIDATION.md) for test coverage, live versus fixture checks
 - [x] Source-hash revalidation, dirty-buffer invalidation, and cached file-digest freshness checks.
 - [x] Stable xAI prompt prefix/conversation ID plus cached-token observability.
 - [x] Unit, protocol, Python, and real VS Code host regressions written before implementation.
+
+## v0.2.2 follow-up: GUIDE reference shortlist
+
+- [x] Up to three grounded reference suggestions displayed alongside the next-topic guidance.
+- [x] Reference titles visible in the native cursor marker and compact sidebar strip.
+- [x] Safe hover/focus details for AI summary, writing-position relevance, and local locator.
+- [x] PDF-first citation deduplication with no weak-match padding or model-generated quotations.
+- [x] Current-token source viewing/locking and existing source freshness invalidation preserved.

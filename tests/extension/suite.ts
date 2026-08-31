@@ -58,8 +58,13 @@ export async function run() {
         .split("\nPRIOR CONVERSATION")[0],
     );
     callCount++;
-    const pdf = packet.artifacts.find(
-      (a: any) => a.kind === "pdf" && a.locator.page === 2,
+    const pdfs = packet.artifacts.filter(
+      (artifact: any, index: number, all: any[]) =>
+        artifact.kind === "pdf" &&
+        all.findIndex(
+          (candidate) =>
+            candidate.kind === "pdf" && candidate.path === artifact.path,
+        ) === index,
     );
     const result = packet.artifacts.find(
       (a: any) =>
@@ -77,16 +82,21 @@ export async function run() {
             ? "as established by \\cite{unknown2027}."
             : "with progressive ESS reaching 42."
           : "",
-      evidence_ids: [pdf?.id, result?.id].filter(Boolean),
-      source_notes: pdf
-        ? [
-            {
-              artifact_id: pdf.id,
-              summary: "A synthetic comparison of sampling approaches.",
-              relevance: "Context for the comparison at the cursor.",
-            },
-          ]
-        : [],
+      evidence_ids: [
+        ...pdfs.slice(0, 2).map((pdf: any) => pdf.id),
+        result?.id,
+      ].filter(Boolean),
+      source_notes: pdfs.slice(0, 2).map((pdf: any, index: number) => ({
+        artifact_id: pdf.id,
+        summary:
+          index === 0
+            ? "A synthetic comparison of sampling approaches."
+            : "A synthetic discussion of runtime and robustness tradeoffs.",
+        relevance:
+          index === 0
+            ? "Context for the comparison at the cursor."
+            : "Adds a limitation to address before interpreting efficiency.",
+      })),
       outline_ids: [],
       citation_keys: [],
       claims:
@@ -203,6 +213,21 @@ export async function run() {
         ),
       ),
       "Native GUIDE hover must contain the escaped suggestion text",
+    );
+    const hoverMarkdown = hovers
+      ?.flatMap((hover) => hover.contents)
+      .filter((content): content is vscode.MarkdownString =>
+        Boolean(content && typeof content !== "string" && "value" in content),
+      )
+      .map((content) => content.value)
+      .join("\n");
+    assert.match(hoverMarkdown || "", /Suggested references/);
+    assert.match(hoverMarkdown || "", /ⓘ details/);
+    assert.match(hoverMarkdown || "", /Summary · AI interpretation/);
+    assert.match(hoverMarkdown || "", /Why suggested here/);
+    assert.ok(
+      cardState.guideReferences?.length >= 2,
+      "GUIDE state must expose multiple grounded references when the project has them",
     );
     const sourceCard = cardState.sources.find(
       (s: any) => s.artifact.kind === "pdf",

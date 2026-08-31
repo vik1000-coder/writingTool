@@ -22,7 +22,7 @@ After dependency setup, run these commands in the clone to build and install:
 
 ```sh
 npm run package
-code --install-extension research-copilot-0.2.1.vsix
+code --install-extension research-copilot-0.2.2.vsix
 ```
 
 Alternatively, use **Install from VSIX…** in VS Code's Extensions view menu and select the package file. Open your research folder in the installed extension's window and configure its runtime paths below. This installs locally; it does not publish anything. Compile your manuscript with your normal LaTeX tools; compilation is not part of this extension.

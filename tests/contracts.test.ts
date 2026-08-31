@@ -6,7 +6,7 @@ import {
   OUTPUT_SCHEMA,
   schemaForMode,
 } from "../src/core/integrity";
-import { assembleContext } from "../src/core/context";
+import { assembleContext, buildPrompt } from "../src/core/context";
 import { prepareEdit } from "../src/core/edits";
 import type { Artifact, Suggestion } from "../src/core/types";
 export const response = (extra: Partial<Suggestion> = {}): Suggestion => ({
@@ -64,6 +64,24 @@ test("compact WRITE output keeps evidence/citation/numeric gates with no researc
     false,
   );
   assert.throws(() => validateSuggestion(compact, "guide"));
+});
+
+test("GUIDE asks for a topic plus a small grounded reference shortlist", () => {
+  const context = assembleContext({
+    mode: "guide",
+    path: "main.tex",
+    text: "A draft paragraph.",
+    offset: 18,
+    artifacts: [],
+    budget: 4000,
+  });
+  const prompt = buildPrompt(context);
+  assert.match(prompt, /up to three high-value reference suggestions/i);
+  assert.match(prompt, /summary and why it belongs at this writing position/i);
+  assert.match(
+    prompt,
+    /prefer current PDF passages over bibliography-only metadata/i,
+  );
 });
 
 test("mode contracts reject unexpected prose, giant continuations, unknown modes, and edits outside Chat", () => {

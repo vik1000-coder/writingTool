@@ -186,6 +186,57 @@ main {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.guide-reference-strip {
+  border-top: 1px solid var(--line);
+  margin-top: 13px;
+  padding-top: 11px;
+}
+.guide-reference-strip > .muted {
+  margin: -2px 0 8px;
+}
+.reference-suggestion {
+  position: relative;
+  border-top: 1px solid var(--line);
+  padding: 7px 0 5px;
+}
+.reference-suggestion:first-of-type {
+  border-top: 0;
+}
+.reference-title {
+  max-width: 100%;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.reference-summary {
+  color: var(--muted);
+  font-size: 11px;
+  margin: 2px 0 4px;
+}
+.reference-tooltip {
+  position: absolute;
+  z-index: 20;
+  display: none;
+  top: calc(100% + 4px);
+  left: 0;
+  width: min(290px, calc(100vw - 58px));
+  padding: 9px 10px;
+  border: 1px solid var(--vscode-editorHoverWidget-border, var(--line));
+  border-radius: 4px;
+  color: var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground));
+  background: var(
+    --vscode-editorHoverWidget-background,
+    var(--vscode-sideBar-background)
+  );
+  box-shadow: 0 3px 12px #0004;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  pointer-events: none;
+}
+.reference-suggestion:hover .reference-tooltip,
+.reference-suggestion:focus-within .reference-tooltip {
+  display: block;
+}
 .warning {
   border-left: 2px solid var(--vscode-editorWarning-foreground, #bc8c3f);
   padding: 6px 10px;
