@@ -1,7 +1,10 @@
 src/**
 tests/**
 scripts/**
-docs/**
+docs/screenshots/**
+docs/ARCHITECTURE.md
+docs/IMPLEMENTATION.md
+docs/VALIDATION.md
 examples/**
 .github/**
 .vscode/**
@@ -18,3 +21,5 @@ dist/test-suite.js.map
 package-lock.json
 Technical Specification*
 CONTRIBUTING.md
+CHANGELOG.md
+SECURITY.md

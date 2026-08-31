@@ -4,7 +4,21 @@
 
 A local-first VS Code extension for scientific writing in LaTeX. It combines your manuscript, optional outline, bibliography, local PDFs, results, code, and figures into small, inspectable model requests. The researcher remains the author.
 
-The implementation covers the specification's Stages A–C. It uses the existing VS Code editor and your usual LaTeX tooling. There is no hosted service, account system, vector database, or custom compiler.
+The implementation covers the specification's Stages A–C, with the deliberate boundaries recorded in the implementation ledger. It uses the existing VS Code editor and your usual LaTeX tooling. There is no hosted service, account system, vector database, or custom compiler.
+
+## Documentation
+
+| Document | What it covers |
+| --- | --- |
+| [Usage guide](docs/USAGE.md) | First session, all modes/commands, references, results/code, outlines, cursor tracking, context controls, and reviewed edits. |
+| [Configuration](docs/CONFIGURATION.md) | Subscription/API/local backends, every setting, supported files, project YAML, limits, and local storage. |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Setup, sign-in, missing evidence, blocked suggestions, inline acceptance, and safe cache recovery. |
+| [Architecture](docs/ARCHITECTURE.md) | Request flow, code map, provenance, and extension points. |
+| [Contributing](CONTRIBUTING.md) | Development setup, test-driven changes, checks, and GitHub workflow. |
+| [Security and privacy](SECURITY.md) | Data boundaries, safe reporting, and precautions before publication. |
+| [Changelog](CHANGELOG.md) | Version history and known boundaries. |
+| [Implementation coverage](docs/IMPLEMENTATION.md) / [Validation record](docs/VALIDATION.md) | Acceptance criteria, test evidence, live versus fixture checks, and remaining limits. |
+| [Original specification](Technical%20Specification_%20Local-First%20AI%20Research%20Writing%20IDE.md) | The supplied product and technical specification. |
 
 ## Run locally
 
@@ -43,18 +57,18 @@ The internal representation separates **lens** from **intervention level**. Ever
 
 ## Evidence you can inspect
 
-- **References:** BibTeX title, author, year, venue, DOI/URL and matched local PDF. Unknown citation keys are blocked. A bibliography entry without retrieved full text is explicitly unverified.
+- **References:** Indexed BibTeX metadata, citation insertion, and matched local PDFs. Cards display author/year/venue; full entries remain editable in your bibliography file. Unknown citation keys are blocked. A bibliography entry without retrieved full text is explicitly unverified.
 - **PDFs:** Exact locally extracted text, page, character range, and bounding rectangles. **Open highlighted passage** renders that page locally and highlights the stored source region. Page controls and zoom are included; no external PDF service is involved.
 - **Results:** CSV and JSON schemas, dimensions, previews, numeric statistics and slices of at most 25 rows. Row numbers count data records, excluding the CSV header (including quoted multiline records).
 - **Numbers:** A numerical WRITE claim needs a matching cell, row, column and current file hash. Missing or stale provenance blocks ghost-text insertion. Grounding means the cited cell exists; it does **not** establish that an interpretation, unit, causal claim, or statistical inference is correct. Derived quantities are not silently certified as computed analysis.
 - **Context:** Inspect the exact prompt, selected artifacts, structured response, warnings, and applied-edit metadata. Pin artifacts or exclude them from retrieval. The manuscript at the cursor remains part of every request.
 - **Project intelligence:** Python AST and notebook code cells are parsed without execution. Figure labels, captions, manuscript references, and discoverable code/data relationships are registered. Inferred lineage is distinguishable from user-confirmed relationships.
 
-Markdown outlines remain valid. YAML outlines can hold goals, claims, evidence, figures, and status. Without an outline, manuscript headings supply an ephemeral structure; no outline file is created or overwritten. **Set Current Section Goal** stores a local section summary and pinned evidence.
+Markdown outlines remain valid. YAML outlines can hold goals, claims, evidence, figures, and status. Without an outline, manuscript headings supply an ephemeral structure; no outline file is created or overwritten. **Set Current Section Goal** stores a local section summary and pinned evidence. The assistant follows the active manuscript, cursor, headings, and unsaved prose. Outline editing and writing-stage status remain under your control; there is no automatic completion tracking or drag-and-drop outline editor. See the [outline walkthrough](docs/USAGE.md#manage-the-outline-and-section-goals).
 
 ## Use an existing research project
 
-Open any trusted local folder. File layout is flexible; supported files are discovered recursively while respecting Git ignores and common private/generated paths. Symlinks are not indexed. Unsaved LaTeX text is used for manuscript context; other source files with unsaved changes are withheld until saved.
+Open any trusted local folder. File layout is flexible. In Git repositories, discovery includes tracked files plus untracked files that Git does not ignore; already tracked files remain discoverable even if later ignored. Without Git discovery, the fallback uses built-in exclusions rather than parsing `.gitignore`. Use explicit project exclusions for sensitive material. Symlinks are not indexed. Unsaved LaTeX text is used for manuscript context; other source files with unsaved changes are withheld until saved.
 
 Optional `.research-copilot/project.yaml`:
 
@@ -98,11 +112,11 @@ The settings prefix is `researchCopilot`.
 | `localModel`, `localEndpoint` | An installed local model and loopback OpenAI-compatible `/v1` URL; default endpoint is Ollama's `http://127.0.0.1:11434/v1` |
 | `codexPath`, `pythonPath` | Executable paths, never shell command strings |
 | `automaticSuggestions`, `debounceMs` | Opt-in GUIDE sentence / WRITE pause / EVIDENCE paragraph triggers; visual and structure stay explicit |
-| `contextBudget` | Serialized context character limit; source blocks are never silently truncated |
+| `contextBudget` | Serialized context character limit; each bounded indexed block is included whole or omitted. Not a token or whole-prompt limit. |
 | `diagnostics` | Toggle evidence warnings in the editor |
 | `logRequests` | Opt-in local research request logs; disabled by default |
 
-OpenAI API billing is separate from ChatGPT. Use **Set OpenAI API Key** to store a key in VS Code SecretStorage, never in project files. The local adapter accepts only loopback HTTP(S) endpoints and refuses redirects. No API key is needed for Codex's ChatGPT authentication.
+OpenAI API billing is separate from ChatGPT. Use **Set OpenAI API Key** to store a key in VS Code SecretStorage, never in project files. The local adapter accepts only loopback HTTP(S) endpoints and refuses redirects. No API key is needed for Codex's ChatGPT authentication; access and limits depend on the account, and the extension does not verify a particular subscription tier. See [backend setup](docs/CONFIGURATION.md#chatgpt-subscription-through-codex) and the [complete settings reference](docs/CONFIGURATION.md#settings-reference).
 
 The Codex adapter was tested with CLI **0.151.0**, including live ChatGPT-authenticated generation. An older system CLI can advertise a model it cannot run; update it or select a compatible model. The developer build's pinned CLI avoids this particular mismatch. Tool execution and inherited MCP connectors are disabled for suggestion sessions, which also use a read-only sandbox and reject approval requests.
 
@@ -113,7 +127,7 @@ npm run package
 code --install-extension research-copilot-0.1.0.vsix
 ```
 
-The VSIX contains the bundled extension, webview assets and Python helper sources. Development tools, models, node_modules and Python wheels are **not** bundled. For an installed VSIX, set `pythonPath` to your prepared Python environment (for example the absolute path to this clone's `.venv/bin/python`, or `.venv\\Scripts\\python.exe` on Windows), and ensure a current `codex` is on PATH or set `codexPath`. Use **Check Local Setup** to inspect capabilities. No VS Code Marketplace publication is required.
+The VSIX contains the bundled extension, webview assets, Python helper sources, and the usage/configuration/troubleshooting guides. Development tools, models, node_modules and Python wheels are **not** bundled. For an installed VSIX, set `pythonPath` in **User Settings** to your prepared Python environment (for example the absolute path to this clone's `.venv/bin/python`, or `.venv\\Scripts\\python.exe` on Windows), and ensure a current `codex` is on PATH or set `codexPath`. Use **Check Local Setup** to inspect capabilities. No VS Code Marketplace publication is required. Windows remains unverified; macOS and Linux have been exercised.
 
 Compilation remains your normal LaTeX workflow; [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) is optional. The built-in source viewer is for evidence PDFs, not a replacement for manuscript compilation.
 
@@ -122,7 +136,12 @@ Compilation remains your normal LaTeX workflow; [LaTeX Workshop](https://marketp
 ```sh
 npm run verify          # strict TypeScript, core tests, Python/PDF tests, build
 npm run test:extension  # isolated real VS Code host, local HTTP fixture, real indexer
-npx tsx scripts/smoke-codex.ts --generate # optional LIVE Codex call; synthetic context only
+```
+
+Optional live smoke test on macOS/Linux, explicitly using the repository's Codex CLI (consumes provider usage; sends synthetic text only):
+
+```sh
+RESEARCH_CODEX_PATH="$PWD/node_modules/.bin/codex" npx tsx scripts/smoke-codex.ts --generate
 ```
 
 The normal test suite makes no cloud model requests. Python tests use `.venv` when available; without optional dependencies, PDF/YAML-specific cases explicitly skip. Run setup for the full suite. Tests cover malformed sources, provenance forgery, citation injection, cancellation, subprocess failure, unsaved changes, configuration invalidation, result indexing, PDF geometry, and read-only interaction. Native inline commit tests require an OS-focused test window; background hosts verify completion state and report the focus-dependent portion separately.
@@ -131,6 +150,6 @@ See [implementation coverage](docs/IMPLEMENTATION.md), [validation notes](docs/V
 
 ## Privacy
 
-This extension has no telemetry. It launches one local indexer and Codex on demand, creates no listening service, and does not scrape ChatGPT. Research files remain ordinary local files. Cloud model use transmits the selected context and prompt to that provider; local storage does not imply offline inference. Codex's own authentication, retention, provider, and administrative settings remain subject to its configuration. Logs are opt-in and may contain unpublished work. Secret-name exclusions reduce accidental exposure but cannot identify every sensitive file: use project exclusions and inspect context before sending.
+This extension has no telemetry. It launches one local indexer and Codex on demand, creates no listening service, and does not scrape ChatGPT. Research files remain ordinary local files. Cloud model use transmits selected context and the prompt (including bounded Chat history when applicable) to that provider; local storage does not imply offline inference. Codex's own authentication, retention, provider, and administrative settings remain subject to its configuration. Logs are opt-in and may contain unpublished work. Secret-name exclusions cannot identify every sensitive file: configure file/folder exclusions **before** requesting help. **Inspect Last Request** is retrospective, not a preflight approval screen. See [security and privacy](SECURITY.md).
 
 MIT licensed. PDFium/Pillow/PyYAML and development dependencies retain their own licenses. The sample source PDF is generated by this repository and is not a real publication.
