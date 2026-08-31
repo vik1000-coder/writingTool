@@ -1,0 +1,19 @@
+src/**
+tests/**
+scripts/**
+docs/**
+examples/**
+.github/**
+.vscode/**
+.venv/**
+.vscode-test/**
+node_modules/**
+test-results/**
+**/__pycache__/**
+**/*.pyc
+**/*.test.*
+tsconfig.json
+package-lock.json
+Technical Specification*
+CONTRIBUTING.md
+

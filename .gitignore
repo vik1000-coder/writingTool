@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.vsix
+.venv/
+.vscode-test/
+__pycache__/
+*.pyc
+.DS_Store
+.research-copilot/
+coverage/
+test-results/
+
