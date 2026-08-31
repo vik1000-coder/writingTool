@@ -6,6 +6,7 @@ import { HttpBackend } from "./backends/http";
 import { assembleContext, buildPrompt } from "./core/context";
 import { hashText, prepareEdit, safeRelative } from "./core/edits";
 import { cursorContext, parseLatex, resolveIncludes } from "./core/latex";
+import { refreshManuscriptArtifact } from "./core/live";
 import { resolveSuggestion, validateSuggestion } from "./core/integrity";
 import { MODES, shouldTrigger, validateMode } from "./core/modes";
 import type {
@@ -688,16 +689,10 @@ export class ResearchCopilot
     );
     const currentArtifacts = artifacts
       .filter((a) => !dirtySources.has(a.path))
-      .map((a) => {
-        if (a.kind !== "tex" || !texFiles.has(a.path)) return a;
-        const live = texFiles.get(a.path)!;
-        return {
-          ...a,
-          text: live
-            .slice(a.locator.start ?? 0, a.locator.end ?? 6000)
-            .slice(0, 6000),
-          hash: hashText(live),
-        };
+      .flatMap((a) => {
+        if (!texFiles.has(a.path)) return [a];
+        const live = refreshManuscriptArtifact(a, texFiles.get(a.path)!);
+        return live ? [live] : [];
       });
     const packet = assembleContext({
       mode,

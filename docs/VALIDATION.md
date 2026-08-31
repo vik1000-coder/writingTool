@@ -4,14 +4,14 @@ Validated on 31 August 2026. These are implementation checks, not evidence that 
 
 ## Automated checks
 
-- `npm run verify`: strict TypeScript, 21 TypeScript tests, 14 Python tests (including PDFium/Pillow and YAML), and the production bundle pass locally.
+- `npm run verify`: strict TypeScript, 22 TypeScript tests, 14 Python tests (including PDFium/Pillow and YAML), and the production bundle pass locally.
 - `npm run test:extension`: passes in a real VS Code 1.127 extension host with a disposable workspace, a deterministic loopback HTTP fixture, and the real Python helper. No cloud model is called by these tests.
 - Host coverage includes activation without inference, all six modes, read-only suggestions, grounded WRITE, invented-citation rejection, OFF with explicit Chat, diff review and explicit apply, stale-review rejection, unsaved-source omission, cancellation, evidence watchers, request inspection, sidebar activation, automatic debounce, and OFF suppression.
-- Native inline rendering/acceptance and Undo depend on OS window focus. The host suite checks them when focused; when a macOS background host cannot execute native editor commands, it reports that limitation and restores only its disposable fixtures. Manual checks cover native acceptance and Undo separately.
+- The Linux CI run exercised native inline acceptance and Undo in a focused Xvfb host. Native inline rendering/acceptance and Undo depend on OS window focus. The host suite checks them when focused; when a macOS background host cannot execute native editor commands, it reports that limitation and restores only its disposable fixtures. Manual checks cover native acceptance and Undo separately.
 - `npm run setup` prepares the repository's Python environment without modifying system Python. `vsce package --no-dependencies` produces a roughly 94 KB VSIX with no node_modules, models, Python wheels, tests, or development dependencies.
 - `npm audit --omit=dev`: no production dependency vulnerabilities reported (there are no production npm dependencies).
 
-The tests were developed alongside the implementation. New failing regressions led to fixes for stale or fabricated evidence, numeric-sign parsing, unsafe TeX directives, changed configuration, late CSV slices, outdated relationship confirmation, PDF highlight compositing, stale sidebar snapshots, cancellation before a Codex turn ID arrives, and macOS path aliases creating duplicate editor buffers.
+The tests were developed alongside the implementation. New failing regressions led to fixes for stale or fabricated evidence, numeric-sign parsing, unsafe TeX directives, changed configuration, late CSV slices, outdated relationship confirmation, PDF highlight compositing, stale sidebar snapshots, cancellation before a Codex turn ID arrives, and macOS path aliases creating duplicate editor buffers, and unsaved changes shifting section offsets.
 
 ## Live backend check
 
@@ -21,7 +21,7 @@ The Responses API and local adapter are covered by protocol/HTTP tests. Paid Ope
 
 ## Visual checks
 
-The running extension was inspected in VS Code on macOS. Checks included mode selection, GUIDE cards, native WRITE ghost text followed by Tab and Undo, exact local quotations, PDF page navigation, return to the evidence page, and zoom. The highlight preserves the original glyphs. Screenshots use deterministic synthetic responses and a synthetic PDF; they are not live-model or real research examples.
+The running extension was inspected in VS Code on macOS. Checks included mode selection, GUIDE cards, native WRITE ghost text followed by Tab and Undo, exact local quotations, PDF page navigation, return to the evidence page, zoom, and explicit Chat diff approval followed by native Undo. The highlight preserves the original glyphs. Screenshots use deterministic synthetic responses and a synthetic PDF; they are not live-model or real research examples.
 
 ![GUIDE with synthetic project context](screenshots/guide.jpg)
 
@@ -49,4 +49,4 @@ The resulting SQLite file was 17,068,032 bytes. These are one-machine smoke meas
 - Numeric validation verifies an exact current cell locator. It does not establish scientific validity, correct units, causal support, or a statistically sound interpretation. Automatic computation is intentionally absent.
 - macOS has been exercised locally. GitHub CI runs Linux with a real extension host under Xvfb. Windows remains unverified; use F5 if the `code` launcher is unavailable.
 
-GitHub workflow results provide the authoritative CI status for each commit. The repository remains private; no Marketplace or public release has been published.
+The [initial complete Linux CI run](https://github.com/vik1000-coder/writingTool/actions/runs/33364355998) passed verification, native editor integration, and packaging. GitHub workflow results provide the authoritative CI status for each commit. The repository remains private; no Marketplace or public release has been published.
