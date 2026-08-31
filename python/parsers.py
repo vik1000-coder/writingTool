@@ -50,7 +50,7 @@ def parse_bibtex(text):
                 raise ValueError('BibTeX entry has no fields')
             key, body = body.split(',', 1)
             key = key.strip()
-            if not re.fullmatch(r'[^\s{}\\,]+', key) or key in keys:
+            if not re.fullmatch(r'[A-Za-z0-9_:./+@-]+', key) or key in keys:
                 raise ValueError(f'Invalid or duplicate BibTeX key: {key}')
             keys.add(key)
         fields, pos = {}, 0

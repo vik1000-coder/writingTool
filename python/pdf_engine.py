@@ -58,7 +58,7 @@ def extract(path, max_pages=500):
 
 def render(path, page_number, scale=1.4, rects=None):
     import pypdfium2 as pdfium
-    from PIL import ImageDraw
+    from PIL import Image, ImageDraw
     with pdfium.PdfDocument(path) as doc:
         if not isinstance(page_number, int) or page_number < 1 or page_number > len(doc):
             raise ValueError('Page is outside this PDF')
@@ -70,7 +70,8 @@ def render(path, page_number, scale=1.4, rects=None):
             bitmap = page.render(scale=scale)
             try:
                 image = bitmap.to_pil().convert('RGBA')
-                draw = ImageDraw.Draw(image, 'RGBA')
+                overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
+                draw = ImageDraw.Draw(overlay)
                 device_rects = []
                 # PDFium's page-to-device transform handles crop boxes and page rotation.
                 import ctypes
@@ -87,6 +88,7 @@ def render(path, page_number, scale=1.4, rects=None):
                         draw.rectangle((x1, y1, x2, y2), fill=(255, 211, 72, 80), outline=(211, 153, 0, 200))
                         device_rects.append([x1, y1, x2, y2])
                 output = io.BytesIO()
+                image = Image.alpha_composite(image, overlay)
                 image.save(output, format='PNG')
                 return {'image': base64.b64encode(output.getvalue()).decode(), 'page': page_number, 'pages': len(doc), 'width': image.width, 'height': image.height, 'highlight_rects': device_rects}
             finally:

@@ -100,6 +100,9 @@ class IndexTests(unittest.TestCase):
         self.index.update_state('relation', edge)
         self.index.scan()
         self.assertTrue(any(r['confirmed'] for r in self.index.graph()))
+        self.write('code/plot.py', 'def make_plot():\n    savefig("figures/sweep.svg")\n')
+        self.index.scan()
+        self.assertFalse(any(r['confirmed'] for r in self.index.graph()), 'Changed artifacts require renewed confirmation')
 
     def test_optional_outline_no_persistent_outline_and_state_survives_rebuild(self):
         self.write('paper/main.tex', '\\section{Results}\n\\subsection{Cost}\nDiscuss cost.')
@@ -123,6 +126,52 @@ class IndexTests(unittest.TestCase):
         found = self.index.search('unique', ['result'])
         self.assertTrue(any(91 in a['locator'].get('rows', []) for a in found))
         self.assertTrue(all(len(a['metadata'].get('rows', [])) <= 25 for a in found))
+
+    def test_search_ranks_before_limiting_candidates(self):
+        self.write('results/data.csv', 'method,ess\n' + 'other,1\n' * 99999 + 'needle,42\n')
+        self.index.scan()
+        found = self.index.search('method needle', ['result'], 1)
+        self.assertIn(100000, found[0]['locator'].get('rows', []), 'A relevant late slice must outrank common early matches')
+
+    @unittest.skipUnless(Index.has_yaml(), 'Optional YAML dependency is not installed')
+    def test_configuration_changes_reclassify_unchanged_files_and_exclude_old_records(self):
+        self.write('plans/argument.md', '# A deliberate outline\n- Explain the comparison.\n')
+        self.write('results/sweep.csv', 'ess\n42\n')
+        self.index.scan()
+        self.assertFalse(self.index.search('', ['outline']))
+        self.write('.research-copilot/project.yaml', 'outline:\n  path: plans/argument.md\nexclude:\n  - results/**\n')
+        self.index.scan()
+        self.assertTrue(self.index.search('', ['outline']))
+        self.assertFalse(self.index.search('', ['result']))
+        self.assertTrue((self.root / '.research-copilot/.gitignore').exists())
+
+    def test_sensitive_filenames_and_bibliography_keys_are_not_usable_for_injection(self):
+        self.write('config/service-account.json', '{"private_key":"secret"}')
+        self.write('config/credentials.yaml', 'password: secret')
+        self.index.scan()
+        self.assertFalse(any('secret' in a['text'] for a in self.index.search('', None, 100)))
+        self.assertRaises(ValueError, parse_bibtex, '@misc{evil%key,title={unsafe}}')
+
+    def test_read_tex_span_is_bounded_and_does_not_read_other_file_types(self):
+        self.write('paper/main.tex', '\\section{Results}\nExact manuscript text.')
+        self.write('secret.txt', 'secret')
+        self.index.scan()
+        result = self.index.dispatch('read_tex_span', {'path': 'paper/main.tex', 'start': 18, 'end': 23})
+        self.assertEqual(result['text'], 'Exact')
+        self.assertRaises(ValueError, self.index.dispatch, 'read_tex_span', {'path': 'secret.txt', 'start': 0, 'end': 6})
+
+    def test_figure_registry_records_caption_label_first_reference_and_lineage(self):
+        self.write('paper/main.tex', '\\section{Results}\nSee \\ref{fig:comparison}.\n\\begin{figure}\n\\includegraphics{../figures/comparison.svg}\n\\caption{Comparison of ESS}\n\\label{fig:comparison}\n\\end{figure}')
+        self.write('figures/comparison.svg', '<svg/>')
+        self.write('results/comparison.csv', 'ess\n42\n')
+        self.write('code/plot.py', 'def plot():\n    read_csv("results/comparison.csv")\n    savefig("figures/comparison.svg")\n')
+        self.index.scan()
+        figure = self.index.get('figure:figures/comparison.svg')
+        self.assertEqual(figure['metadata']['caption'], 'Comparison of ESS')
+        self.assertEqual(figure['metadata']['label'], 'fig:comparison')
+        self.assertEqual(figure['metadata']['first_reference']['path'], 'paper/main.tex')
+        self.assertEqual(figure['metadata']['source_data'], ['result:results/comparison.csv'])
+        self.assertEqual(figure['metadata']['generated_by'], ['code:code/plot.py#plot'])
 
 
 if __name__ == '__main__':

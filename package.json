@@ -186,7 +186,7 @@
         "researchCopilot.localEndpoint": {
           "type": "string",
           "default": "http://127.0.0.1:11434/v1",
-          "scope": "machine",
+          "scope": "machine-overridable",
           "description": "Loopback OpenAI-compatible endpoint, including /v1."
         },
         "researchCopilot.automaticSuggestions": {
@@ -222,9 +222,11 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
+    "setup": "node scripts/setup.mjs",
+    "dev": "npm run build && node scripts/dev.mjs",
     "check": "tsc --noEmit",
     "test:core": "tsx --test tests/*.test.ts",
-    "test:indexer": "python3 -m unittest discover -s tests/python -v",
+    "test:indexer": "node scripts/test-python.mjs",
     "test": "npm run test:core && npm run test:indexer",
     "test:extension": "npm run build && node scripts/test-extension.mjs",
     "verify": "npm run check && npm test && npm run build",
@@ -232,11 +234,15 @@
     "vscode:prepublish": "npm run build"
   },
   "devDependencies": {
+    "@openai/codex": "^0.151.0",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^22.20.1",
-    "@types/vscode": "^1.134.0",
+    "@types/vscode": "1.96.0",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.28.2",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.9.6",
     "tsx": "^4.23.13",
     "typescript": "^5.9.3"
   }

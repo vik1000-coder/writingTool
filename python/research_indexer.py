@@ -45,6 +45,13 @@ class Index:
         if self.local.is_symlink():
             raise ValueError('Index directory must not be a symlink')
         self.local.mkdir(exist_ok=True)
+        ignore = self.local / '.gitignore'
+        if not ignore.exists():
+            try:
+                with ignore.open('x', encoding='utf-8') as f:
+                    f.write('index.sqlite*\nlogs/\n')
+            except FileExistsError:
+                pass
         self.db_path = self.local / 'index.sqlite'
         if self.db_path.is_symlink():
             raise ValueError('Index database must not be a symlink')
@@ -57,6 +64,7 @@ class Index:
             CREATE INDEX IF NOT EXISTS artifacts_path ON artifacts(path);
             CREATE INDEX IF NOT EXISTS artifacts_kind ON artifacts(kind);
             CREATE TABLE IF NOT EXISTS edges(source TEXT NOT NULL, target TEXT NOT NULL, relation TEXT NOT NULL, PRIMARY KEY(source,target,relation));
+            CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
         ''')
         self.config = {}
         self.load_config()
@@ -101,7 +109,7 @@ class Index:
         p = Path(name)
         if p.suffix.lower() not in SUFFIXES or any(part in SKIP_DIRS for part in p.parts):
             return False
-        if any(part.startswith('.') for part in p.parts) or p.name.lower() in {'package.json', 'package-lock.json', 'tsconfig.json', 'auth.json', 'credentials.json', 'secrets.json'}:
+        if any(part.startswith('.') for part in p.parts) or p.name.lower() in {'package.json', 'package-lock.json', 'tsconfig.json'} or re.search(r'(?:^|[-_.])(auth|credentials?|secrets?|passwords?|tokens?|service[-_]account|private[-_]key)(?:[-_.]|$)', p.name.lower()):
             return False
         if any(matches(name, pattern) for pattern in self.config.get('exclude', [])):
             return False
@@ -188,7 +196,7 @@ class Index:
         elif suffix == '.tex':
             commands = list(tex_commands(source))
             headings = [(cmd, arg, start, end) for cmd, arg, start, end in commands if cmd in ('part', 'chapter', 'section', 'subsection', 'subsubsection', 'paragraph')]
-            yield artifact('tex', title=Path(name).name, text=source[:6000], metadata={'includes': [arg for cmd, arg, _, _ in commands if cmd in ('input', 'include', 'subfile')], 'citations': [k.strip() for cmd, arg, _, _ in commands if 'cite' in cmd for k in arg.split(',')], 'headings': [h[1] for h in headings]})
+            yield artifact('tex', title=Path(name).name, text=source[:6000], metadata={'includes': [arg for cmd, arg, _, _ in commands if cmd in ('input', 'include', 'subfile')], 'citations': [k.strip() for cmd, arg, _, _ in commands if 'cite' in cmd for k in arg.split(',')], 'references': [{'label': arg, 'start': start, 'line': source[:start].count('\n') + 1} for cmd, arg, start, _ in commands if cmd in ('ref', 'autoref', 'cref', 'Cref', 'pageref')], 'headings': [h[1] for h in headings]})
             seen = {}
             for index, (cmd, title, start, end) in enumerate(headings):
                 slug = re.sub(r'[^\w]+', '-', title.lower()).strip('-') or 'section'
@@ -227,6 +235,11 @@ class Index:
 
     def scan(self, paths=None):
         self.load_config()
+        config_hash = digest(dumps({'config': self.config, 'index_format': 1}).encode())
+        old_config = self.db.execute('SELECT value FROM metadata WHERE key=\'config_hash\'').fetchone()
+        configuration_changed = not old_config or old_config[0] != config_hash
+        if configuration_changed:
+            paths = None
         discovered = set(self.discover())
         existing = {r[0]: (r[1], r[2]) for r in self.db.execute('SELECT path,hash,error FROM files')}
         # Always reconcile deleted/newly excluded files, including changes to .gitignore/config.
@@ -246,7 +259,7 @@ class Index:
                         raise ValueError('File exceeds 20 MiB indexing limit')
                     raw = p.read_bytes()
                     file_hash = digest(raw)
-                    if existing.get(name) == (file_hash, None):
+                    if not configuration_changed and existing.get(name) == (file_hash, None):
                         unchanged += 1
                         continue
                     self.db.execute('DELETE FROM artifacts WHERE path=?', (name,))
@@ -261,6 +274,7 @@ class Index:
                     self.db.execute('INSERT OR REPLACE INTO files VALUES(?,?,?)', (name, file_hash, str(e)))
                     warnings.append(f'{name}: {e}')
             self.link()
+            self.db.execute('INSERT OR REPLACE INTO metadata VALUES(\'config_hash\',?)', (config_hash,))
         warnings.extend(f'{name}: {error}' for name, error in self.db.execute('SELECT path,error FROM files WHERE error IS NOT NULL') if f'{name}: {error}' not in warnings)
         return {'indexed': indexed, 'unchanged': unchanged, 'removed': len(removed), 'count': self.db.execute('SELECT count(*) FROM artifacts').fetchone()[0], 'warnings': warnings, 'capabilities': {**pdf_engine.capabilities(), 'yaml': self.has_yaml()}, 'config': self.config}
 
@@ -296,14 +310,27 @@ class Index:
             for term in terms:
                 like = '%' + term.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
                 args.extend([like, like, like])
-        sql = 'SELECT data FROM artifacts' + (' WHERE ' + ' AND '.join(conditions) if conditions else '') + ' ORDER BY id LIMIT 2000'
-        records = [json.loads(r[0]) for r in self.db.execute(sql, args)]
-        state = self.state()
-        confirmed = {r['source'] for r in state['relations']} | {r['target'] for r in state['relations']}
-        records.sort(key=lambda a: (-sum(5 * (t in a['title'].lower()) + 2 * (t in a['path'].lower()) + (t in a['text'].lower()) for t in terms) - 5 * (a['id'] in confirmed), a['id']))
+        # Rank every matching row in SQLite before selecting a bounded result set.
+        # A pre-ranking LIMIT silently loses highly relevant late CSV/PDF blocks.
+        ranks, rank_args = [], []
+        for term in terms:
+            ranks.append('(5*(instr(lower(title),?)>0)+2*(instr(lower(path),?)>0)+(instr(lower(text),?)>0))')
+            rank_args.extend([term, term, term])
+        confirmed = set()
+        for edge in self.state()['relations']:
+            source, target = self.get(edge['source'], fresh=False), self.get(edge['target'], fresh=False)
+            if source and target and source['hash'] == edge.get('source_hash') and target['hash'] == edge.get('target_hash'):
+                confirmed.update([source['id'], target['id']])
+        if confirmed:
+            ranks.append('5*(id IN (' + ','.join('?' for _ in confirmed) + '))')
+            rank_args.extend(sorted(confirmed))
+        rank = '+'.join(ranks) or '0.0'
+        sql = 'SELECT data FROM artifacts' + (' WHERE ' + ' AND '.join(conditions) if conditions else '') + f' ORDER BY ({rank}) DESC, id'
+        records = self.db.execute(sql, args + rank_args)
         # Validate once per source file, not once per row slice or PDF block.
         fresh, output = {}, []
-        for a in records:
+        for row in records:
+            a = json.loads(row[0])
             identity = (a['path'], a['hash'])
             if identity not in fresh:
                 fresh[identity] = self.current(a)
@@ -364,13 +391,14 @@ class Index:
             else:
                 raise ValueError('Unknown artifact')
         elif action == 'relation':
-            if not self.get(payload['source']) or not self.get(payload['target']):
+            source, target = self.get(payload['source']), self.get(payload['target'])
+            if not source or not target:
                 raise ValueError('Relationships require two current artifacts')
             if payload['relation'] not in ('supports', 'generates', 'reads', 'illustrates', 'cites'):
                 raise ValueError('Unknown relationship type')
             edge = {k: payload[k] for k in ('source', 'target', 'relation')}
             state['relations'] = [r for r in state['relations'] if (r['source'], r['target'], r['relation']) != (edge['source'], edge['target'], edge['relation'])]
-            state['relations'].append({**edge, 'confirmed': True})
+            state['relations'].append({**edge, 'confirmed': True, 'source_hash': source['hash'], 'target_hash': target['hash']})
         elif action == 'section':
             id, summary = payload['id'], payload['summary']
             if not isinstance(summary, str) or len(summary) > 2000 or len(id) > 1000:
@@ -392,6 +420,8 @@ class Index:
         self.db.execute('DELETE FROM edges')
         records = [json.loads(r[0]) for r in self.db.execute('SELECT data FROM artifacts WHERE kind IN (\'code\',\'figure\',\'table\',\'bib\',\'tex\')')]
         file_artifacts = {a['path']: a for a in records if a['kind'] == 'figure' and '#' not in a['id']}
+        for a in file_artifacts.values():
+            a['metadata'] = {'status': 'existing'}
         results = {r[0]: r[1] for r in self.db.execute('SELECT path,id FROM artifacts WHERE kind=\'result\' AND instr(id,\'#\')=0')}
         def link(source, target, relation):
             self.db.execute('INSERT OR IGNORE INTO edges VALUES(?,?,?)', (source, target, relation))
@@ -421,13 +451,31 @@ class Index:
                 for ref in a['metadata'].get('graphics', []):
                     candidates = [f for p, f in file_artifacts.items() if p == ref or str(Path(p).with_suffix('')) == ref or Path(p).stem == Path(ref).stem]
                     if len(candidates) == 1:
-                        link(candidates[0]['id'], a['id'], 'illustrates')
+                        asset = candidates[0]
+                        link(asset['id'], a['id'], 'illustrates')
+                        label = a['metadata'].get('label')
+                        first = next(({'path': tex['path'], **ref} for tex in records if tex['kind'] == 'tex' for ref in tex['metadata'].get('references', []) if ref['label'] == label), None)
+                        asset['metadata'].update({'caption': a['metadata'].get('caption'), 'label': label, 'first_reference': first, 'status': 'in-manuscript'})
+        for a in file_artifacts.values():
+            generators = [r[0] for r in self.db.execute('SELECT source FROM edges WHERE target=? AND relation=\'generates\'', (a['id'],))]
+            data = list(dict.fromkeys(r[0] for code in generators for r in self.db.execute('SELECT target FROM edges WHERE source=? AND relation=\'reads\'', (code,))))
+            a['metadata'].update({'generated_by': generators, 'source_data': data, 'lineage_confidence': 'inferred'})
+            self.put(a)
 
     def graph(self):
         confirmed = self.state()['relations']
         records = [{'source': s, 'target': t, 'relation': r, 'confirmed': False} for s, t, r in self.db.execute('SELECT source,target,relation FROM edges')]
         combined = {(r['source'], r['target'], r['relation']): r for r in records + confirmed}
-        return [r for r in combined.values() if self.get(r['source']) and self.get(r['target'])]
+        output, artifacts = [], {}
+        for r in combined.values():
+            for id in (r['source'], r['target']):
+                if id not in artifacts:
+                    artifacts[id] = self.get(id)
+            source, target = artifacts[r['source']], artifacts[r['target']]
+            if source and target:
+                current = r.get('source_hash') == source['hash'] and r.get('target_hash') == target['hash']
+                output.append({**r, 'confirmed': bool(r['confirmed'] and current)})
+        return output
 
     def render_pdf(self, id, page=None, scale=1.4):
         a = self.get(id)
@@ -436,6 +484,16 @@ class Index:
         pageno = page or a['locator'].get('page', 1)
         result = pdf_engine.render(self.safe_path(a['path']), pageno, scale, a['locator'].get('rects', []) if pageno == a['locator'].get('page') else [])
         return {**result, 'text': a['text'] if pageno == a['locator'].get('page') else '', 'path': a['path']}
+
+    def read_tex_span(self, name, start, end):
+        name = self.relative(name)
+        a = self.get(f'tex:{name}')
+        if not a or not isinstance(start, int) or not isinstance(end, int) or not 0 <= start <= end or end - start > 8000:
+            raise ValueError('Select a bounded span from an indexed LaTeX manuscript')
+        source = self.safe_path(name).read_text('utf-8-sig')
+        if end > len(source):
+            raise ValueError('Span exceeds manuscript length')
+        return {'path': name, 'hash': a['hash'], 'start': start, 'end': end, 'text': source[start:end]}
 
     def dispatch(self, method, p):
         methods = {
@@ -449,6 +507,7 @@ class Index:
             'get_pdf_passage': lambda: self.get(p['id']) if p['id'].startswith('pdf:') else None,
             'get_result_slice': lambda: self.result_slice(p['path'], p['rows'], p['columns']),
             'get_section': lambda: self.get(p['id']),
+            'read_tex_span': lambda: self.read_tex_span(p['path'], p['start'], p['end']),
             'get_outline_node': lambda: self.get(p['id']),
             'get_paper_structure': lambda: self.search('', ['outline'], 100),
             'list_figures': lambda: self.search(p.get('query', ''), ['figure', 'table'], 100),
