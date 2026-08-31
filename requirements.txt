@@ -1,0 +1,4 @@
+# Optional helper features. Core CSV/JSON/AST/SQLite indexing uses Python's stdlib.
+pypdfium2>=5.0,<6
+Pillow>=11.3,<13
+PyYAML>=6.0.2,<7
