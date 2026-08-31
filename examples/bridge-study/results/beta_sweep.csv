@@ -1,0 +1,7 @@
+beta,method,ess,runtime_seconds
+0.1,direct,84,1.1
+0.1,progressive,89,1.4
+0.5,direct,31,1.2
+0.5,progressive,65,1.8
+1.0,direct,7,1.4
+1.0,progressive,42,2.1

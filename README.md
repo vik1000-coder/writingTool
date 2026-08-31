@@ -1,0 +1,136 @@
+# Research Copilot
+
+**Think about what to write before asking AI to write it.**
+
+A local-first VS Code extension for scientific writing in LaTeX. It combines your manuscript, optional outline, bibliography, local PDFs, results, code, and figures into small, inspectable model requests. The researcher remains the author.
+
+The implementation covers the specification's Stages A–C. It uses the existing VS Code editor and your usual LaTeX tooling. There is no hosted service, account system, vector database, or custom compiler.
+
+## Run locally
+
+Prerequisites: VS Code 1.96+, Node.js 20+, and Python 3.10+. The development dependency pins a current Codex CLI; you do not have to replace your system CLI. ChatGPT authentication is managed by Codex.
+
+```sh
+git clone https://github.com/vik1000-coder/writingTool.git
+cd writingTool
+npm ci
+npm run setup
+npm run dev
+```
+
+Or open the repository in VS Code and press **F5**. This launches a separate development window containing the synthetic example study. The developer build automatically uses this repository's Python environment and Codex runtime. `npm run setup` installs only into `.venv`; it does not change system Python.
+
+1. Open **Research Copilot** from the activity bar.
+2. Run **Research Copilot: Sign in with ChatGPT** from the command palette. Existing Codex authentication also works.
+3. Open `paper/results.tex` and place your cursor in a paragraph.
+4. Leave **GUIDE** selected and click **Suggest next step**, or press **Cmd+Option+Space** / **Ctrl+Alt+Space**.
+5. Inspect **Evidence** and **Context** before using the suggestion.
+
+No model request runs on activation. The first explicit cloud request asks whether to send selected project context to the chosen backend. Automatic suggestions are off by default and require opt-in. All example data and PDF sources are synthetic and **must not be treated as scientific findings**.
+
+## Assistance modes
+
+| Mode | Behavior |
+| --- | --- |
+| OFF | No proactive suggestions. Explicit Chat still works. |
+| GUIDE | A purpose for the next sentence, preserving your writing voice. Default. |
+| WRITE | A short native inline continuation. **Tab** accepts, **Esc** dismisses. No automatic insertion. |
+| EVIDENCE | Source passages, empirical slices, and missing-support warnings. |
+| FIGURE / TABLE | A presentation proposal using actual project data, existing figures, and plotting code. May recommend no visualization. |
+| STRUCTURE | Missing argument components, outline goals, and section-level guidance. |
+
+The internal representation separates **lens** from **intervention level**. Every suggestion mode is read-only. Chat may propose a bounded `.tex` edit only when explicitly requested; it opens a diff and requires approval. Applying an edit checks that the manuscript has not changed since review and leaves saving to you. Raw result files cannot be modified through model actions.
+
+## Evidence you can inspect
+
+- **References:** BibTeX title, author, year, venue, DOI/URL and matched local PDF. Unknown citation keys are blocked. A bibliography entry without retrieved full text is explicitly unverified.
+- **PDFs:** Exact locally extracted text, page, character range, and bounding rectangles. **Open highlighted passage** renders that page locally and highlights the stored source region. Page controls and zoom are included; no external PDF service is involved.
+- **Results:** CSV and JSON schemas, dimensions, previews, numeric statistics and slices of at most 25 rows. Row numbers count data records, excluding the CSV header (including quoted multiline records).
+- **Numbers:** A numerical WRITE claim needs a matching cell, row, column and current file hash. Missing or stale provenance blocks ghost-text insertion. Grounding means the cited cell exists; it does **not** establish that an interpretation, unit, causal claim, or statistical inference is correct. Derived quantities are not silently certified as computed analysis.
+- **Context:** Inspect the exact prompt, selected artifacts, structured response, warnings, and applied-edit metadata. Pin artifacts or exclude them from retrieval. The manuscript at the cursor remains part of every request.
+- **Project intelligence:** Python AST and notebook code cells are parsed without execution. Figure labels, captions, manuscript references, and discoverable code/data relationships are registered. Inferred lineage is distinguishable from user-confirmed relationships.
+
+Markdown outlines remain valid. YAML outlines can hold goals, claims, evidence, figures, and status. Without an outline, manuscript headings supply an ephemeral structure; no outline file is created or overwritten. **Set Current Section Goal** stores a local section summary and pinned evidence.
+
+## Use an existing research project
+
+Open any trusted local folder. File layout is flexible; supported files are discovered recursively while respecting Git ignores and common private/generated paths. Symlinks are not indexed. Unsaved LaTeX text is used for manuscript context; other source files with unsaved changes are withheld until saved.
+
+Optional `.research-copilot/project.yaml`:
+
+```yaml
+paper:
+  root: paper/main.tex
+outline:
+  path: outline/outline.md
+bibliography:
+  - references/**/*.bib
+reference_pdfs:
+  - references/pdfs/**/*.pdf
+code:
+  - code/**/*.py
+  - notebooks/**/*.ipynb
+results:
+  - results/**/*.csv
+  - results/**/*.json
+figures:
+  - figures/**/*.{pdf,png,svg}
+exclude:
+  - private/**
+```
+
+All paths are workspace-relative. Open a common parent folder if research files live in sibling directories. External paths and symlinks escaping the workspace are deliberately rejected. A configured resource list scopes that type; omitted lists use discovery. `.parquet` is deferred following the explicit MVP artifact list; CSV/JSON are supported now.
+
+The disposable SQLite index lives at `.research-copilot/index.sqlite`. The helper creates an ignore file for its database and optional logs. Pins, exclusions, confirmed relationships, and section goals live in `state.json`, independently of the index. You can choose whether to version `state.json` and `project.yaml`. **Refresh Project Index** picks up changes; file watchers update incrementally.
+
+Limits keep local work bounded: 5,000 discovered files, 20 MiB per file, 100,000 data rows, 200 columns, 500 pages per PDF, and a configurable default context budget of 24,000 characters. Oversized or corrupt sources produce a visible notice and do not remain usable as stale evidence.
+
+## Backends and settings
+
+The settings prefix is `researchCopilot`.
+
+| Setting | Purpose |
+| --- | --- |
+| `backend` | `codex` (default), `openai`, or `local` |
+| `writeBackend` | `same`, or a separate WRITE provider |
+| `model` | Codex model ID; blank uses Codex's configured default. **Select Codex Model** lists availability. |
+| `openaiModel` | Explicit model ID for the optional Responses API |
+| `localModel`, `localEndpoint` | An installed local model and loopback OpenAI-compatible `/v1` URL; default endpoint is Ollama's `http://127.0.0.1:11434/v1` |
+| `codexPath`, `pythonPath` | Executable paths, never shell command strings |
+| `automaticSuggestions`, `debounceMs` | Opt-in GUIDE sentence / WRITE pause / EVIDENCE paragraph triggers; visual and structure stay explicit |
+| `contextBudget` | Serialized context character limit; source blocks are never silently truncated |
+| `diagnostics` | Toggle evidence warnings in the editor |
+| `logRequests` | Opt-in local research request logs; disabled by default |
+
+OpenAI API billing is separate from ChatGPT. Use **Set OpenAI API Key** to store a key in VS Code SecretStorage, never in project files. The local adapter accepts only loopback HTTP(S) endpoints and refuses redirects. No API key is needed for Codex's ChatGPT authentication.
+
+The Codex adapter was tested with CLI **0.151.0**, including live ChatGPT-authenticated generation. An older system CLI can advertise a model it cannot run; update it or select a compatible model. The developer build's pinned CLI avoids this particular mismatch. Tool execution and inherited MCP connectors are disabled for suggestion sessions, which also use a read-only sandbox and reject approval requests.
+
+## Package and install
+
+```sh
+npm run package
+code --install-extension research-copilot-0.1.0.vsix
+```
+
+The VSIX contains the bundled extension, webview assets and Python helper sources. Development tools, models, node_modules and Python wheels are **not** bundled. For an installed VSIX, set `pythonPath` to your prepared Python environment (for example the absolute path to this clone's `.venv/bin/python`, or `.venv\\Scripts\\python.exe` on Windows), and ensure a current `codex` is on PATH or set `codexPath`. Use **Check Local Setup** to inspect capabilities. No VS Code Marketplace publication is required.
+
+Compilation remains your normal LaTeX workflow; [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) is optional. The built-in source viewer is for evidence PDFs, not a replacement for manuscript compilation.
+
+## Development and tests
+
+```sh
+npm run verify          # strict TypeScript, core tests, Python/PDF tests, build
+npm run test:extension  # isolated real VS Code host, local HTTP fixture, real indexer
+npx tsx scripts/smoke-codex.ts --generate # optional LIVE Codex call; synthetic context only
+```
+
+The normal test suite makes no cloud model requests. Python tests use `.venv` when available; without optional dependencies, PDF/YAML-specific cases explicitly skip. Run setup for the full suite. Tests cover malformed sources, provenance forgery, citation injection, cancellation, subprocess failure, unsaved changes, configuration invalidation, result indexing, PDF geometry, and read-only interaction. Native inline commit tests require an OS-focused test window; background hosts verify completion state and report the focus-dependent portion separately.
+
+See [implementation coverage](docs/IMPLEMENTATION.md), [validation notes](docs/VALIDATION.md), and [contributing](CONTRIBUTING.md). The standalone shell, Zotero, collaboration, OCR, arbitrary TeX macro expansion, Parquet, analysis execution, and automatic figure generation remain outside this MVP. Retrieval is local lexical ranking with mode priorities and explicit relationships, not a claim of perfect semantic relevance.
+
+## Privacy
+
+This extension has no telemetry. It launches one local indexer and Codex on demand, creates no listening service, and does not scrape ChatGPT. Research files remain ordinary local files. Cloud model use transmits the selected context and prompt to that provider; local storage does not imply offline inference. Codex's own authentication, retention, provider, and administrative settings remain subject to its configuration. Logs are opt-in and may contain unpublished work. Secret-name exclusions reduce accidental exposure but cannot identify every sensitive file: use project exclusions and inspect context before sending.
+
+MIT licensed. PDFium/Pillow/PyYAML and development dependencies retain their own licenses. The sample source PDF is generated by this repository and is not a real publication.

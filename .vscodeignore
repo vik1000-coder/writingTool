@@ -13,7 +13,8 @@ test-results/**
 **/*.pyc
 **/*.test.*
 tsconfig.json
+dist/test-suite.js
+dist/test-suite.js.map
 package-lock.json
 Technical Specification*
 CONTRIBUTING.md
-
