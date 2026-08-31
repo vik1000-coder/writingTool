@@ -6,53 +6,217 @@
   "publisher": "research-copilot",
   "private": true,
   "license": "MIT",
-  "engines": { "vscode": "^1.96.0", "node": ">=20" },
-  "categories": ["Other", "Machine Learning"],
-  "keywords": ["latex", "research", "codex", "citations", "local-first"],
-  "repository": { "type": "git", "url": "https://github.com/vik1000-coder/writingTool.git" },
+  "engines": {
+    "vscode": "^1.96.0",
+    "node": ">=20"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "latex",
+    "research",
+    "codex",
+    "citations",
+    "local-first"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vik1000-coder/writingTool.git"
+  },
   "main": "./dist/extension.js",
-  "activationEvents": ["onLanguage:latex", "onLanguage:tex", "onView:researchCopilot.sidebar"],
-  "capabilities": { "untrustedWorkspaces": { "supported": false, "description": "Indexing and model helpers require a trusted local workspace." }, "virtualWorkspaces": false },
+  "activationEvents": [
+    "onLanguage:latex",
+    "onLanguage:tex",
+    "onView:researchCopilot.sidebar"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Indexing and model helpers require a trusted local workspace."
+    },
+    "virtualWorkspaces": false
+  },
   "contributes": {
-    "viewsContainers": { "activitybar": [{ "id": "researchCopilot", "title": "Research Copilot", "icon": "media/research.svg" }] },
-    "views": { "researchCopilot": [{ "type": "webview", "id": "researchCopilot.sidebar", "name": "Research Copilot" }] },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "researchCopilot",
+          "title": "Research Copilot",
+          "icon": "media/research.svg"
+        }
+      ]
+    },
+    "views": {
+      "researchCopilot": [
+        {
+          "type": "webview",
+          "id": "researchCopilot.sidebar",
+          "name": "Research Copilot"
+        }
+      ]
+    },
     "commands": [
-      { "command": "researchCopilot.setMode", "title": "Research Copilot: Select Assistance Mode" },
-      { "command": "researchCopilot.suggest", "title": "Research Copilot: Suggest / Regenerate" },
-      { "command": "researchCopilot.cancel", "title": "Research Copilot: Cancel Suggestion" },
-      { "command": "researchCopilot.signIn", "title": "Research Copilot: Sign in with ChatGPT" },
-      { "command": "researchCopilot.selectModel", "title": "Research Copilot: Select Codex Model" },
-      { "command": "researchCopilot.reindex", "title": "Research Copilot: Refresh Project Index" },
-      { "command": "researchCopilot.configure", "title": "Research Copilot: Configure Project" },
-      { "command": "researchCopilot.apiKey", "title": "Research Copilot: Set OpenAI API Key" },
-      { "command": "researchCopilot.inspectContext", "title": "Research Copilot: Inspect Last Request" },
-      { "command": "researchCopilot.reviewEdit", "title": "Research Copilot: Review Proposed Edit" },
-      { "command": "researchCopilot.applyEdit", "title": "Research Copilot: Apply Reviewed Edit" },
-      { "command": "researchCopilot.pin", "title": "Research Copilot: Pin Project Artifact" },
-      { "command": "researchCopilot.confirmRelation", "title": "Research Copilot: Confirm Evidence Relationship" },
-      { "command": "researchCopilot.sectionMemory", "title": "Research Copilot: Set Current Section Goal" },
-      { "command": "researchCopilot.setup", "title": "Research Copilot: Check Local Setup" }
+      {
+        "command": "researchCopilot.setMode",
+        "title": "Research Copilot: Select Assistance Mode"
+      },
+      {
+        "command": "researchCopilot.suggest",
+        "title": "Research Copilot: Suggest / Regenerate"
+      },
+      {
+        "command": "researchCopilot.cancel",
+        "title": "Research Copilot: Cancel Suggestion"
+      },
+      {
+        "command": "researchCopilot.signIn",
+        "title": "Research Copilot: Sign in with ChatGPT"
+      },
+      {
+        "command": "researchCopilot.selectModel",
+        "title": "Research Copilot: Select Codex Model"
+      },
+      {
+        "command": "researchCopilot.reindex",
+        "title": "Research Copilot: Refresh Project Index"
+      },
+      {
+        "command": "researchCopilot.configure",
+        "title": "Research Copilot: Configure Project"
+      },
+      {
+        "command": "researchCopilot.apiKey",
+        "title": "Research Copilot: Set OpenAI API Key"
+      },
+      {
+        "command": "researchCopilot.inspectContext",
+        "title": "Research Copilot: Inspect Last Request"
+      },
+      {
+        "command": "researchCopilot.reviewEdit",
+        "title": "Research Copilot: Review Proposed Edit"
+      },
+      {
+        "command": "researchCopilot.applyEdit",
+        "title": "Research Copilot: Apply Reviewed Edit"
+      },
+      {
+        "command": "researchCopilot.pin",
+        "title": "Research Copilot: Pin Project Artifact"
+      },
+      {
+        "command": "researchCopilot.confirmRelation",
+        "title": "Research Copilot: Confirm Evidence Relationship"
+      },
+      {
+        "command": "researchCopilot.sectionMemory",
+        "title": "Research Copilot: Set Current Section Goal"
+      },
+      {
+        "command": "researchCopilot.setup",
+        "title": "Research Copilot: Check Local Setup"
+      }
     ],
     "keybindings": [
-      { "command": "researchCopilot.suggest", "key": "ctrl+alt+space", "mac": "cmd+alt+space", "when": "editorLangId == latex || editorLangId == tex" },
-      { "command": "researchCopilot.cancel", "key": "escape", "when": "researchCopilot.busy && editorTextFocus" }
+      {
+        "command": "researchCopilot.suggest",
+        "key": "ctrl+alt+space",
+        "mac": "cmd+alt+space",
+        "when": "editorLangId == latex || editorLangId == tex"
+      },
+      {
+        "command": "researchCopilot.cancel",
+        "key": "escape",
+        "when": "researchCopilot.busy && editorTextFocus"
+      }
     ],
     "configuration": {
       "title": "Research Copilot",
       "properties": {
-        "researchCopilot.backend": { "type": "string", "enum": ["codex", "openai", "local"], "default": "codex", "description": "Model backend. The OpenAI API is billed separately from ChatGPT." },
-        "researchCopilot.writeBackend": { "type": "string", "enum": ["same", "codex", "openai", "local"], "default": "same", "description": "Optional separate backend for WRITE." },
-        "researchCopilot.codexPath": { "type": "string", "default": "codex", "scope": "machine", "description": "Codex executable path (not a shell command)." },
-        "researchCopilot.pythonPath": { "type": "string", "default": "python3", "scope": "machine", "description": "Python 3.10+ executable with optional PDF/YAML dependencies." },
-        "researchCopilot.model": { "type": "string", "default": "", "description": "Codex model ID; empty uses the installed Codex default." },
-        "researchCopilot.openaiModel": { "type": "string", "default": "", "description": "Model ID for the optional OpenAI Responses API. Required when selected." },
-        "researchCopilot.localModel": { "type": "string", "default": "", "description": "Model ID for the local OpenAI-compatible server. Required when selected." },
-        "researchCopilot.localEndpoint": { "type": "string", "default": "http://127.0.0.1:11434/v1", "scope": "machine", "description": "Loopback OpenAI-compatible endpoint, including /v1." },
-        "researchCopilot.automaticSuggestions": { "type": "boolean", "default": false, "description": "Opt into debounced GUIDE, WRITE, and EVIDENCE calls. OFF always suppresses proactive AI." },
-        "researchCopilot.debounceMs": { "type": "number", "default": 1800, "minimum": 800, "maximum": 30000 },
-        "researchCopilot.contextBudget": { "type": "number", "default": 24000, "minimum": 4000, "maximum": 100000, "description": "Maximum serialized context characters per request." },
-        "researchCopilot.diagnostics": { "type": "boolean", "default": true, "description": "Show subtle evidence integrity warnings on the current paragraph." },
-        "researchCopilot.logRequests": { "type": "boolean", "default": false, "description": "Opt-in local request/response logs under .research-copilot/logs. May contain unpublished research." }
+        "researchCopilot.backend": {
+          "type": "string",
+          "enum": [
+            "codex",
+            "openai",
+            "local"
+          ],
+          "default": "codex",
+          "description": "Model backend. The OpenAI API is billed separately from ChatGPT."
+        },
+        "researchCopilot.writeBackend": {
+          "type": "string",
+          "enum": [
+            "same",
+            "codex",
+            "openai",
+            "local"
+          ],
+          "default": "same",
+          "description": "Optional separate backend for WRITE."
+        },
+        "researchCopilot.codexPath": {
+          "type": "string",
+          "default": "codex",
+          "scope": "machine",
+          "description": "Codex executable path (not a shell command)."
+        },
+        "researchCopilot.pythonPath": {
+          "type": "string",
+          "default": "python3",
+          "scope": "machine",
+          "description": "Python 3.10+ executable with optional PDF/YAML dependencies."
+        },
+        "researchCopilot.model": {
+          "type": "string",
+          "default": "",
+          "description": "Codex model ID; empty uses the installed Codex default."
+        },
+        "researchCopilot.openaiModel": {
+          "type": "string",
+          "default": "",
+          "description": "Model ID for the optional OpenAI Responses API. Required when selected."
+        },
+        "researchCopilot.localModel": {
+          "type": "string",
+          "default": "",
+          "description": "Model ID for the local OpenAI-compatible server. Required when selected."
+        },
+        "researchCopilot.localEndpoint": {
+          "type": "string",
+          "default": "http://127.0.0.1:11434/v1",
+          "scope": "machine",
+          "description": "Loopback OpenAI-compatible endpoint, including /v1."
+        },
+        "researchCopilot.automaticSuggestions": {
+          "type": "boolean",
+          "default": false,
+          "description": "Opt into debounced GUIDE, WRITE, and EVIDENCE calls. OFF always suppresses proactive AI."
+        },
+        "researchCopilot.debounceMs": {
+          "type": "number",
+          "default": 1800,
+          "minimum": 800,
+          "maximum": 30000
+        },
+        "researchCopilot.contextBudget": {
+          "type": "number",
+          "default": 24000,
+          "minimum": 4000,
+          "maximum": 100000,
+          "description": "Maximum serialized context characters per request."
+        },
+        "researchCopilot.diagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show subtle evidence integrity warnings on the current paragraph."
+        },
+        "researchCopilot.logRequests": {
+          "type": "boolean",
+          "default": false,
+          "description": "Opt-in local request/response logs under .research-copilot/logs. May contain unpublished research."
+        }
       }
     }
   },
@@ -66,5 +230,14 @@
     "verify": "npm run check && npm test && npm run build",
     "package": "npm run verify && vsce package --no-dependencies",
     "vscode:prepublish": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@types/vscode": "^1.134.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3"
   }
 }
