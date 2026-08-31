@@ -105,9 +105,10 @@ The settings prefix is `researchCopilot`.
 
 | Setting | Purpose |
 | --- | --- |
-| `backend` | `codex` (default), `openai`, or `local` |
+| `backend` | `codex` (default), `openai`, `grok`, or `local` |
 | `writeBackend` | `same`, or a separate WRITE provider |
 | `model` | Codex model ID; blank uses Codex's configured default. **Select Codex Model** lists availability. |
+| `grokModel` | xAI structured-output model; defaults to `grok-4.6` |
 | `openaiModel` | Explicit model ID for the optional Responses API |
 | `localModel`, `localEndpoint` | An installed local model and loopback OpenAI-compatible `/v1` URL; default endpoint is Ollama's `http://127.0.0.1:11434/v1` |
 | `codexPath`, `pythonPath` | Executable paths, never shell command strings |
@@ -115,6 +116,10 @@ The settings prefix is `researchCopilot`.
 | `contextBudget` | Serialized context character limit; each bounded indexed block is included whole or omitted. Not a token or whole-prompt limit. |
 | `diagnostics` | Toggle evidence warnings in the editor |
 | `logRequests` | Opt-in local research request logs; disabled by default |
+
+Grok is also available: run **Research Copilot: Set Grok API Key**, paste the key into the masked input, and choose all modes or WRITE only. The key stays in VS Code SecretStorage. `grokModel` defaults to `grok-4.6`; xAI API usage is billed separately. See [Grok setup](docs/CONFIGURATION.md#grok--xai-api-backend).
+
+GUIDE now opens a compact native hover with a topic, source title, AI summary, and why the source fits. **Lock reference** holds its exact highlighted local quote in the left panel while you write; **WRITE** continues to use Tab-accepted ghost text. See [cards and reference locking](docs/USAGE.md#guide-cards-and-locked-references).
 
 OpenAI API billing is separate from ChatGPT. Use **Set OpenAI API Key** to store a key in VS Code SecretStorage, never in project files. The local adapter accepts only loopback HTTP(S) endpoints and refuses redirects. No API key is needed for Codex's ChatGPT authentication; access and limits depend on the account, and the extension does not verify a particular subscription tier. See [backend setup](docs/CONFIGURATION.md#chatgpt-subscription-through-codex) and the [complete settings reference](docs/CONFIGURATION.md#settings-reference).
 
@@ -124,7 +129,7 @@ The Codex adapter was tested with CLI **0.151.0**, including live ChatGPT-authen
 
 ```sh
 npm run package
-code --install-extension research-copilot-0.1.0.vsix
+code --install-extension research-copilot-0.2.0.vsix
 ```
 
 The VSIX contains the bundled extension, webview assets, Python helper sources, and the usage/configuration/troubleshooting guides. Development tools, models, node_modules and Python wheels are **not** bundled. For an installed VSIX, set `pythonPath` in **User Settings** to your prepared Python environment (for example the absolute path to this clone's `.venv/bin/python`, or `.venv\\Scripts\\python.exe` on Windows), and ensure a current `codex` is on PATH or set `codexPath`. Use **Check Local Setup** to inspect capabilities. No VS Code Marketplace publication is required. Windows remains unverified; macOS and Linux have been exercised.

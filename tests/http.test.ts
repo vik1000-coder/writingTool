@@ -3,6 +3,124 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { HttpBackend, localEndpoint } from "../src/backends/http";
 import { assembleContext } from "../src/core/context";
+test("cloud adapters reject malformed keys, refused/malformed output and oversized responses", async (t) => {
+  const context = assembleContext({
+    mode: "guide",
+    path: "main.tex",
+    text: "Text.",
+    offset: 5,
+    artifacts: [],
+    budget: 4000,
+  });
+  let calls = 0,
+    content: string | null = null;
+  t.mock.method(globalThis, "fetch", async (url: string) => {
+    calls++;
+    const body = url.includes("api.x.ai")
+      ? { choices: [{ message: { content } }] }
+      : {
+          output: [
+            {
+              type: "message",
+              content: [{ type: "output_text", text: content }],
+            },
+          ],
+        };
+    return new Response(JSON.stringify(body));
+  });
+  for (const kind of ["grok", "openai"] as const) {
+    const consume = async (apiKey = "synthetic-key") => {
+      for await (const _ of new HttpBackend({
+        kind,
+        model: "fixture",
+        apiKey,
+      }).suggest({ context, prompt: "test" })) {
+        /* consume */
+      }
+    };
+    const before = calls;
+    await assert.rejects(
+      consume("synthetic-secret\ninvalid"),
+      (e: Error) =>
+        /key/i.test(e.message) && !e.message.includes("synthetic-secret"),
+    );
+    assert.equal(
+      calls,
+      before,
+      "Malformed key must never enter the HTTP stack",
+    );
+    content = null;
+    await assert.rejects(consume(), /no structured text/);
+    content = "not JSON";
+    await assert.rejects(consume(), SyntaxError);
+    content = "x".repeat(1000001);
+    await assert.rejects(consume(), /1 MB limit/);
+  }
+});
+test("Grok uses only xAI, authenticates, requests strict JSON and redacts errors", async (t) => {
+  const context = assembleContext({
+    mode: "guide",
+    path: "main.tex",
+    text: "Text.",
+    offset: 5,
+    artifacts: [],
+    budget: 4000,
+  });
+  let calls = 0,
+    status = 200;
+  const abort = new AbortController();
+  t.mock.method(globalThis, "fetch", async (url: string, init: RequestInit) => {
+    calls++;
+    assert.equal(url, "https://api.x.ai/v1/chat/completions");
+    assert.equal(init.redirect, "error");
+    assert.equal((init.headers as any).Authorization, "Bearer test-secret");
+    const body = JSON.parse(init.body as string);
+    assert.equal(body.model, "grok-4.6");
+    assert.equal(body.response_format.json_schema.strict, true);
+    assert.equal(body.messages[0].content, "bounded prompt");
+    assert.equal(body.tools, undefined);
+    assert.equal(init.signal?.aborted, abort.signal.aborted);
+    if (init.signal?.aborted) throw new Error("aborted");
+    return new Response(
+      status === 200
+        ? JSON.stringify({
+            choices: [{ message: { content: '{"answer":"ok"}' } }],
+          })
+        : "test-secret private response",
+      { status },
+    );
+  });
+  const consume = async (apiKey?: string) => {
+    const backend = new HttpBackend({
+      kind: "grok",
+      model: "grok-4.6",
+      apiKey,
+      endpoint: "https://evil.example",
+    });
+    const events = [];
+    for await (const event of backend.suggest({
+      context,
+      prompt: "bounded prompt",
+      signal: abort.signal,
+    }))
+      events.push(event);
+    return events;
+  };
+  await assert.rejects(consume(), /Set Grok API Key/);
+  assert.equal(calls, 0);
+  assert.deepEqual((await consume("test-secret")).at(-1), {
+    type: "result",
+    value: { answer: "ok" },
+  });
+  status = 401;
+  await assert.rejects(
+    consume("test-secret"),
+    (error: Error) =>
+      /Grok.*401/.test(error.message) && !error.message.includes("test-secret"),
+  );
+  abort.abort();
+  await assert.rejects(consume("test-secret"), /aborted/);
+});
 test("local backend rejects remote endpoints, credentials and URL tricks", () => {
   assert.equal(
     localEndpoint("http://127.0.0.1:11434/v1/"),

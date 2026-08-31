@@ -22,7 +22,7 @@ After dependency setup, run these commands in the clone to build and install:
 
 ```sh
 npm run package
-code --install-extension research-copilot-0.1.0.vsix
+code --install-extension research-copilot-0.2.0.vsix
 ```
 
 Alternatively, use **Install from VSIX…** in VS Code's Extensions view menu and select the package file. Open your research folder in the installed extension's window and configure its runtime paths below. This installs locally; it does not publish anything. Compile your manuscript with your normal LaTeX tools; compilation is not part of this extension.
@@ -60,6 +60,18 @@ API billing is separate from ChatGPT. Select `backend: "openai"`, set `openaiMod
 
 The adapter calls the Responses API with a strict JSON schema and `store: false`; that flag is not a promise about all provider-side retention. No paid API inference is part of the ordinary test suite.
 
+### Grok / xAI API backend
+
+1. Run **Research Copilot: Set Grok API Key** from the command palette (or choose **Set Grok API key** in **Check Local Setup**).
+2. Paste your xAI key into the masked input. It is saved in VS Code SecretStorage, never project settings or request logs. Submit an empty value to remove it. Do not paste keys into Chat or commit them to Git.
+3. Choose **Use Grok for all modes**, **Use Grok for WRITE only**, or **Keep current backend**. This changes routing for the open workspace only; it does not make a model request.
+4. The default `grokModel` is `grok-4.6`. Change it to another model available to your xAI account that supports structured outputs if needed.
+5. Request a suggestion and approve sending selected context to **Grok / xAI API**. This consent is separate from Codex/OpenAI consent and lasts for the current project/backend session.
+
+For manual routing, set `researchCopilot.backend` to `grok` and `researchCopilot.writeBackend` to `same`. To keep Codex for guidance and use Grok for ghost text, use `backend: "codex"` and `writeBackend: "grok"`.
+
+The adapter sends bounded text context to the fixed `https://api.x.ai/v1/chat/completions` endpoint with bearer authentication and a strict JSON schema, following [xAI structured-output documentation](https://docs.x.ai/developers/model-capabilities/text/structured-outputs). It does not enable web/X search, code execution, or other model tools. API usage is billed by xAI; chat subscriptions do not substitute for API credentials or credits. Provider retention policies still apply. The normal tests use fixtures, not paid Grok inference.
+
 ### Optional local model backend
 
 Run your chosen local server yourself, then configure:
@@ -86,12 +98,13 @@ All names below start with `researchCopilot.`.
 
 | Setting | Default | Accepted values / meaning |
 | --- | --- | --- |
-| `backend` | `"codex"` | `codex`, `openai`, `local`. |
-| `writeBackend` | `"same"` | `same`, `codex`, `openai`, `local`; applies only to WRITE. |
+| `backend` | `"codex"` | `codex`, `openai`, `grok`, `local`. |
+| `writeBackend` | `"same"` | `same`, `codex`, `openai`, `grok`, `local`; applies only to WRITE. |
 | `codexPath` | `"codex"` | Codex executable; machine-scoped. Development builds prefer the repository CLI when left at this default. |
 | `pythonPath` | `"python3"` | Python 3.10+ executable; machine-scoped. Development builds prefer `.venv` when left at this default. |
 | `model` | `""` | Codex model ID; blank leaves the choice to Codex. |
 | `openaiModel` | `""` | Required model ID when the API backend is selected. |
+| `grokModel` | `"grok-4.6"` | xAI model supporting structured outputs, used when Grok is selected. |
 | `localModel` | `""` | Required installed model ID when the local backend is selected. |
 | `localEndpoint` | `"http://127.0.0.1:11434/v1"` | Loopback server base URL, normally including `/v1`. |
 | `automaticSuggestions` | `false` | Enable debounced GUIDE, WRITE, and EVIDENCE triggers. |
@@ -173,7 +186,7 @@ Search results and panel catalogs return at most 100 matches; narrow searches in
 | `.research-copilot/state.json` | Pins, artifact exclusions, confirmed relationships, section goals | Back up with your research project if you want to retain these choices; may reveal research context. |
 | `.research-copilot/index.sqlite*` | Disposable index and SQLite sidecar files | Do not commit; rebuild from source files when needed. Contains extracted research text/data. |
 | `.research-copilot/logs/` | Opt-in request/response records | Off by default; may contain unpublished material. Disable logging and delete unwanted logs manually. |
-| VS Code state / SecretStorage | UI preferences / optional OpenAI API key | Managed by VS Code. Use the API-key command with an empty value to remove that key. |
+| VS Code state / SecretStorage | UI preferences / optional OpenAI and Grok API keys | Managed by VS Code. Use the API-key command with an empty value to remove that key. |
 | Codex's own credential storage | ChatGPT/Codex authentication | Managed by Codex, independently of project files or extension removal. |
 
 The helper creates `.research-copilot/.gitignore` with `index.sqlite*` and `logs/` exclusions if it does not already exist. It does not hide `state.json` or `project.yaml` automatically. Your repository's own ignore rules may still hide the entire directory. Inspect both configuration and state before publishing them; this extension does not synchronize them to a service.

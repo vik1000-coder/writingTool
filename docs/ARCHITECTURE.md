@@ -9,9 +9,9 @@ This is a VS Code extension, not a standalone editor or hosted service. The runt
 1. The controller captures the active manuscript, cursor, mode, and optional explicit question. Model calls are explicit unless automatic suggestions are enabled. Cloud calls require consent.
 2. The local indexer retrieves bounded artifacts by lexical relevance, resource kind, pins, and current confirmed relationships.
 3. The core assembles a context packet. Unsaved manuscript text replaces saved excerpts; dirty non-manuscript sources are withheld. Exclusions and the character budget apply before inference.
-4. The selected backend returns a schema-constrained suggestion. The model receives preassembled context; it cannot invoke the indexer's retrieval operations itself in v0.1.
+4. The selected backend returns a schema-constrained suggestion. The model receives preassembled context; it cannot invoke the indexer's retrieval operations itself in v0.2.
 5. Locally resolved current artifacts validate evidence IDs, citation keys, numerical locators, hashes, and insertion constraints. Cancellation and document versions prevent stale results from becoming current suggestions.
-6. The sidebar displays text/evidence. WRITE can expose a native inline completion. Chat can propose a bounded manuscript diff, which needs separate review and explicit application against unchanged text.
+6. GUIDE uses a native hover/decoration; the sidebar displays locally resolved source cards and session-only locked quotations. WRITE can expose a native inline completion. Chat can propose a bounded manuscript diff, which needs separate review and explicit application against unchanged text.
 
 ## Code map
 
@@ -27,7 +27,7 @@ This is a VS Code extension, not a standalone editor or hosted service. The runt
 | `python/research_indexer.py` | Workspace discovery, incremental SQLite index, retrieval, relationships, and persistent controls. |
 | `python/parsers.py`, `pdf_engine.py` | Static source/data parsing and local PDF extraction/rendering. |
 | `src/backends/rpc.ts`, `codex.ts` | JSONL process transport and Codex app-server authentication, model selection, inference, and cancellation. |
-| `src/backends/http.ts` | Optional Responses API and loopback Chat Completions adapters. |
+| `src/backends/http.ts` | OpenAI Responses, fixed-endpoint Grok/xAI Chat Completions, and loopback Chat Completions adapters. |
 | `src/ui/`, `media/` | Restrictive webview shell, plain JavaScript/CSS sidebar, and PDF viewer. Untrusted text is rendered as text nodes. |
 | `tests/`, `scripts/` | Behavioral tests, real host acceptance suite, setup/build/packaging, synthetic live smoke check, and index benchmark. |
 
@@ -52,3 +52,7 @@ For a new artifact type, start with a synthetic parser/indexer regression that c
 New editor writes require tests for review, explicit approval, changed targets, and native Undo. Keep experiment execution and figure generation out of ordinary suggestion paths. Do not add a model-driven retrieval loop by enabling general shell or filesystem tools; that follow-up needs bounded read-only operations and its own design/testing.
 
 Use the [acceptance ledger](IMPLEMENTATION.md) to distinguish implemented behavior from deferred scope, and [validation record](VALIDATION.md) to distinguish mocks, real host checks, and live provider checks.
+
+## Source card boundary
+
+`source_notes` carries model summaries/relevance keyed to selected evidence IDs; it never carries a source quotation. `core/cards.ts` projects only locally resolved artifacts and joins PDF titles to known bibliography metadata. `ui/hover.ts` uses escaped Markdown and enables only the internal reference action command. Each card action requires the current random token and source ID, then rechecks the source hash and dirty-buffer state before showing the quote. Cursor changes invalidate the token. A reading lock survives manuscript navigation but is cleared on source/configuration/root changes. It does not pin context or persist across sessions.

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0 — 2026-08-31
+
+- Add Grok/xAI API support with SecretStorage keys, separate consent, model selection setting, and optional WRITE-only routing.
+- Add native GUIDE hover cards showing a suggested topic, local source title, relevant AI summary, and rationale.
+- Add reference selection/locking with highlighted exact local text in the sidebar and original PDF navigation.
+- Invalidate stale hover actions and changed/dirty source locks; preserve locked references during manuscript navigation.
+- Keep WRITE native ghost text and existing evidence/explicit-edit protections; add unit, DOM, and real extension-host regressions.
+
 ## 0.1.0 — 2026-08-31
 
 Initial local VS Code MVP covering Stages A–C. Source and VSIX are available through this repository; this is not a Marketplace or public-release announcement.

@@ -22,7 +22,7 @@ export function localEndpoint(endpoint: string): string {
 export class HttpBackend implements ResearchModelBackend {
   constructor(
     private config: {
-      kind: "local" | "openai";
+      kind: "local" | "openai" | "grok";
       endpoint?: string;
       model: string;
       apiKey?: string;
@@ -33,38 +33,51 @@ export class HttpBackend implements ResearchModelBackend {
       throw new Error(
         `Choose a ${this.config.kind} model ID in Research Copilot settings`,
       );
-    if (this.config.kind === "openai" && !this.config.apiKey)
+    if (this.config.kind === "openai" && !this.config.apiKey?.trim())
       throw new Error(
         "Set your OpenAI API key with Research Copilot: Set OpenAI API Key. API billing is separate from ChatGPT.",
       );
+    if (this.config.kind === "grok" && !this.config.apiKey?.trim())
+      throw new Error(
+        "Set your xAI key with Research Copilot: Set Grok API Key. Grok API usage is billed by xAI.",
+      );
     const local = this.config.kind === "local";
+    if (!local && !/^[\x21-\x7E]+$/.test(this.config.apiKey!))
+      throw new Error(
+        "Invalid API key format. Enter a key without spaces or control characters using the API key command.",
+      );
+    const grok = this.config.kind === "grok";
+    const label = local ? "Local model" : grok ? "Grok API" : "OpenAI API";
     const endpoint = local
       ? localEndpoint(this.config.endpoint ?? "http://127.0.0.1:11434/v1") +
         "/chat/completions"
-      : "https://api.openai.com/v1/responses";
+      : grok
+        ? "https://api.x.ai/v1/chat/completions"
+        : "https://api.openai.com/v1/responses";
     const schema = {
       name: "research_suggestion",
       strict: true,
       schema: OUTPUT_SCHEMA,
     };
-    const body = local
-      ? {
-          model: this.config.model,
-          messages: [{ role: "user", content: request.prompt }],
-          stream: false,
-          response_format: { type: "json_schema", json_schema: schema },
-        }
-      : {
-          model: this.config.model,
-          store: false,
-          input: request.prompt,
-          text: { format: { type: "json_schema", ...schema } },
-        };
+    const body =
+      local || grok
+        ? {
+            model: this.config.model,
+            messages: [{ role: "user", content: request.prompt }],
+            stream: false,
+            response_format: { type: "json_schema", json_schema: schema },
+          }
+        : {
+            model: this.config.model,
+            store: false,
+            input: request.prompt,
+            text: { format: { type: "json_schema", ...schema } },
+          };
     yield {
       type: "status",
       text: local
         ? "Asking your local model…"
-        : "Asking OpenAI API (separate API billing)…",
+        : `Asking ${label} (separate API billing)…`,
     };
     const signal = request.signal
       ? AbortSignal.any([request.signal, AbortSignal.timeout(120000)])
@@ -81,7 +94,7 @@ export class HttpBackend implements ResearchModelBackend {
     });
     if (!response.ok)
       throw new Error(
-        `${local ? "Local model" : "OpenAI API"} returned HTTP ${response.status}. Check model availability and authentication.`,
+        `${label} returned HTTP ${response.status}. Check model availability and authentication.`,
       );
     const reader = response.body?.getReader();
     if (!reader) throw new Error("Model returned an empty response");
@@ -102,14 +115,15 @@ export class HttpBackend implements ResearchModelBackend {
       await reader.cancel();
     }
     const parsed = JSON.parse(data);
-    const result = local
-      ? parsed.choices?.[0]?.message?.content
-      : parsed.output
-          ?.filter((o: any) => o.type === "message")
-          .flatMap((o: any) => o.content ?? [])
-          .filter((c: any) => c.type === "output_text")
-          .map((c: any) => c.text)
-          .join("");
+    const result =
+      local || grok
+        ? parsed.choices?.[0]?.message?.content
+        : parsed.output
+            ?.filter((o: any) => o.type === "message")
+            .flatMap((o: any) => o.content ?? [])
+            .filter((c: any) => c.type === "output_text")
+            .map((c: any) => c.text)
+            .join("");
     if (typeof result !== "string" || !result)
       throw new Error("Model returned no structured text (possibly a refusal)");
     yield {

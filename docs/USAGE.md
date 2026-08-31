@@ -25,7 +25,7 @@ Use the mode selector in the sidebar or **Research Copilot: Select Assistance Mo
 | Mode | When to use it | What happens |
 | --- | --- | --- |
 | OFF | You want to write without proactive assistance | Suggestions are suppressed; explicit Chat questions still work. |
-| GUIDE | You know the topic but want help deciding the next move | Suggests the purpose of the next sentence, without inserting prose. |
+| GUIDE | You know the topic but want help deciding the next move | Shows a floating editor card with the next topic/purpose, a reference summary, and why it fits; no prose is inserted. |
 | WRITE | You want a short continuation at the cursor | Offers native ghost text, at most two sentences / 600 characters, subject to evidence checks. |
 | EVIDENCE | You want to check a claim against your sources | Shows locally resolved passages, results, and missing-support warnings. |
 | FIGURE / TABLE | You are deciding how to present a result | Proposes a figure, table, or no visualization using indexed project artifacts. It does not generate a plot. |
@@ -36,6 +36,21 @@ For WRITE, keep the manuscript editor focused and request a continuation. **Tab*
 Use **Research Copilot: Cancel Suggestion** or the sidebar's Cancel button to stop a pending request. Moving the cursor, editing the document, or changing modes invalidates outdated suggestions.
 
 Automatic requests are optional. Enable `researchCopilot.automaticSuggestions` only if desired: GUIDE triggers after a sentence ending, WRITE after a pause with text before the cursor, and EVIDENCE after a paragraph break. The default delay is 1,800 ms. FIGURE / TABLE and STRUCTURE stay explicit. OFF suppresses all automatic requests. A cloud backend still requires an initial explicit request and consent.
+
+## GUIDE cards and locked references
+
+Choose **GUIDE** for a floating suggestion card, or **WRITE** for native ghost text. In GUIDE, an explicit request opens a native VS Code hover near your cursor. The small ◇ marker shows the suggested topic; hover over it or run **Research Copilot: Show Suggestion Card** to reopen the box. Automatic GUIDE requests update the marker without taking keyboard focus. Typing or moving the cursor removes the outdated card; request again for the new location.
+
+The compact box shows one source: its locally indexed title and path/page, a relevant **AI summary**, and **why here** (also an AI interpretation). Other sources and full summaries remain in the **Suggestion** panel. A topic-only suggestion works without a reference. Bibliography metadata alone is marked as a citation candidate, never presented as a verified full-text quote.
+
+- **View source** opens the exact selected passage in the left Research Copilot sidebar. For PDFs, the quotation is locally extracted text highlighted in the panel; the model never supplies that quotation.
+- **Lock reference** keeps that source visible at the top of the sidebar while you move through the manuscript, type, switch modes, or request another suggestion. The displayed relevance explains the original suggestion, not the new cursor position.
+- **Open highlighted PDF page** shows the original page with the selected passage highlighted. This remains available from the left panel.
+- **Unlock reference** closes the held source. Locks are session-only reading aids; use **Pin context** separately to prioritize a source in future requests.
+
+A changed, deleted, excluded, or dirty selected source clears the held quote. Refreshing the index, changing project configuration, or switching workspace roots also clears it. Old hover links cannot restore a stale selection. PDF extraction preserves the indexed text, but ordering and whitespace depend on the PDF text layer; check the original page when precision matters.
+
+For Grok, follow [secure key setup](CONFIGURATION.md#grok--xai-api-backend). You can use it for all modes or just WRITE without changing these interactions.
 
 ## Manage the outline and section goals
 
@@ -190,6 +205,8 @@ Open the command palette with **Cmd+Shift+P** / **Ctrl+Shift+P**. All commands b
 | Select Codex Model | List Codex models and save your choice in user settings. |
 | Refresh Project Index | Rescan local files and report indexing notices. |
 | Configure Project | Open or create the optional project configuration template. |
+| Set Grok API Key | Store/remove the xAI key securely and choose Grok routing for this workspace. |
+| Show Suggestion Card | Reopen the current GUIDE hover in the manuscript editor. |
 | Set OpenAI API Key | Store an API key in VS Code SecretStorage; submit an empty value to remove it. |
 | Inspect Last Request | Open the exact last request and available response/validation details. |
 | Review Proposed Edit | Open a proposed manuscript edit as a diff. |

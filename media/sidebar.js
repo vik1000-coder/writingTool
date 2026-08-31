@@ -195,6 +195,69 @@
   function renderPanel() {
     const panel = $("panel");
     panel.replaceChildren();
+    if (state.selectedSource) {
+      const selected = state.selectedSource,
+        a = selected.artifact;
+      const card = node("article", undefined, "card primary locked-source");
+      card.append(
+        node(
+          "span",
+          selected.locked ? "LOCKED REFERENCE" : "SELECTED REFERENCE",
+          "tag",
+        ),
+        node("h2", a.title),
+        node(
+          "p",
+          `${a.path}${a.locator.page ? ` · p. ${a.locator.page}` : ""}`,
+          "muted source-path",
+        ),
+      );
+      if (a.kind === "bib")
+        card.append(
+          warning(
+            "Citation candidate — no exact full-text quotation selected. Choose a PDF passage to inspect a quote.",
+          ),
+        );
+      else {
+        const quote = node("blockquote");
+        quote.append(node("mark", a.text));
+        card.append(node("h3", "Exact local source text"), quote);
+      }
+      card.append(
+        button(
+          a.kind === "pdf" ? "Open highlighted PDF page" : "Open source",
+          () => send("open", { id: a.id }),
+        ),
+        button(selected.locked ? "Unlock reference" : "Close reference", () =>
+          send("unlockReference"),
+        ),
+      );
+      const notes = node("details");
+      if (
+        !selected.locked &&
+        state.cardToken &&
+        state.sources?.some((s) => s.artifact.id === a.id)
+      )
+        card.append(
+          button("Lock reference", () =>
+            send("reference", { token: state.cardToken, id: a.id, lock: true }),
+          ),
+        );
+      notes.append(
+        node("summary", "Summary and why here · AI interpretation"),
+        node("p", selected.summary),
+        node("p", selected.relevance),
+      );
+      card.append(notes);
+      if (selected.locked)
+        card.append(
+          node(
+            "small",
+            "Held while you write. Pin context separately for future requests. AI notes refer to the original suggestion.",
+          ),
+        );
+      panel.append(card);
+    }
     const resolved = state.result,
       suggestion = resolved?.suggestion;
     if (tab === "Suggestion") {
@@ -250,6 +313,36 @@
             ),
           );
         panel.append(card);
+        if (suggestion.mode === "guide")
+          panel.append(button("Show editor card", () => send("showCard")));
+        (state.sources || []).forEach((s) => {
+          const item = node("article", undefined, "card");
+          item.append(
+            node("h3", s.artifact.title),
+            node("p", s.summary),
+            node("small", "Summary · AI interpretation"),
+            node("p", `Why here: ${s.relevance}`),
+            node("small", "Relevance · AI interpretation"),
+          );
+          if (state.cardToken)
+            item.append(
+              button("View source", () =>
+                send("reference", {
+                  token: state.cardToken,
+                  id: s.artifact.id,
+                  lock: false,
+                }),
+              ),
+              button("Lock reference", () =>
+                send("reference", {
+                  token: state.cardToken,
+                  id: s.artifact.id,
+                  lock: true,
+                }),
+              ),
+            );
+          panel.append(item);
+        });
         resolved.warnings.forEach((w) => panel.append(warning(w)));
         if (resolved.evidence.length)
           panel.append(
@@ -275,7 +368,9 @@
             "Use EVIDENCE mode on a manuscript claim, or search References and Results.",
           ),
         );
-      evidence.forEach((a) => panel.append(source(a)));
+      evidence
+        .filter((a) => a.id !== state.selectedSource?.artifact.id)
+        .forEach((a) => panel.append(source(a)));
       resolved?.warnings.forEach((w) => panel.append(warning(w)));
     } else if (tab === "Context") {
       panel.append(
@@ -460,6 +555,7 @@
     if (e.data.type !== "state") return;
     // Host messages are complete snapshots. JSON omits undefined fields, so merging
     // with old state would keep stale suggestions after edits/cancellation.
+    const previousFocus = state.sourceFocus;
     state = {
       mode: "guide",
       artifacts: [],
@@ -468,6 +564,8 @@
       history: [],
       ...e.data.state,
     };
+    if (state.selectedSource && state.sourceFocus !== previousFocus)
+      selectTab("Evidence");
     $("mode").value = state.mode;
     $("mode-help").textContent = descriptions[state.mode];
     $("status").textContent = state.status || "";

@@ -50,3 +50,11 @@ PDF extraction/rendering uses the [PDFium Python API](https://pypdfium2.readthed
 ## Validation and deliberate boundaries
 
 See [VALIDATION.md](VALIDATION.md) for test coverage, live versus fixture checks, performance measurements, and platform limits. The model receives preassembled context through the local scoped retrieval core; model-initiated tool loops are not enabled. External research directories are supported by opening their common parent as the workspace.
+
+## v0.2 follow-up: Grok and writing cards
+
+- [x] xAI API backend with fixed endpoint, strict schema, secure key storage, per-provider consent, and separate WRITE routing.
+- [x] Native GUIDE hover with topic, local source title, AI summary/relevance, and source/lock actions.
+- [x] Exact local quote highlighted in the left panel; session lock survives writing navigation and clears when the source changes.
+- [x] Preserve native WRITE completion and explicit reviewed manuscript edits.
+- [x] TDD coverage for provider protocol, source projections, unsafe display text, native hover, and lock lifecycle.

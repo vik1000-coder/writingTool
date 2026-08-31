@@ -1,6 +1,6 @@
 # Security and privacy
 
-Research Copilot is an early local-first VS Code extension. The current maintained version is 0.1.0; there is no security response SLA or independent security certification. Do not assume local indexing alone makes cloud inference appropriate for confidential research.
+Research Copilot is an early local-first VS Code extension. The current maintained version is 0.2.0; there is no security response SLA or independent security certification. Do not assume local indexing alone makes cloud inference appropriate for confidential research.
 
 ## Data and capabilities
 
@@ -26,3 +26,5 @@ Include affected versions, a minimal synthetic reproduction, expected versus obs
 Review tracked files and history for credentials, unpublished work, logs, and caches. Choose whether to version `.research-copilot/state.json` and `project.yaml`; never commit the index or request logs. Confirm dependency licenses and a private security-reporting route before inviting external reports. Publishing the source or a Marketplace package is an explicit owner decision, not part of local setup.
 
 See [configuration and storage](docs/CONFIGURATION.md#local-storage-backups-and-removal) for cleanup and [usage](docs/USAGE.md#choose-request-context) for context controls.
+
+Grok requests go only to the fixed xAI HTTPS endpoint; keys are held in VS Code SecretStorage and never included in context or model error messages. Hover actions are limited to a current suggestion token and locally resolved evidence. A highlighted quotation is local source text; model summaries and relevance remain interpretations.

@@ -35,6 +35,17 @@ const server = createServer(async (req, res) => {
         ? "with the comparison becoming clearer under stronger constraints."
         : "",
     evidence_ids: [pdf?.id, result?.id].filter(Boolean),
+    source_notes: pdf
+      ? [
+          {
+            artifact_id: pdf.id,
+            summary:
+              "The synthetic reference contrasts sampling approaches under stronger constraints and notes a runtime tradeoff.",
+            relevance:
+              "It supports the comparison you are developing here, while reminding you to discuss runtime before claiming efficiency.",
+          },
+        ]
+      : [],
     outline_ids: [],
     citation_keys: [],
     claims: [],

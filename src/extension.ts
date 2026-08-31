@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
+import { randomUUID } from "node:crypto";
 import { promises as fs, existsSync } from "node:fs";
 import { CodexBackend } from "./backends/codex";
 import { HttpBackend } from "./backends/http";
@@ -22,6 +23,8 @@ import type {
 import { ProjectIndex, type ScanReport } from "./indexer";
 import { sidebarHtml } from "./ui/shell";
 import { showPdf } from "./ui/pdf";
+import { sourceCards, type SourceCard } from "./core/cards";
+import { SuggestionHover } from "./ui/hover";
 
 const isTex = (document: vscode.TextDocument) =>
   document.uri.scheme === "file" &&
@@ -70,6 +73,11 @@ export class ResearchCopilot
   private projectState = emptyState();
   private relations: Relation[] = [];
   private result?: ResolvedSuggestion;
+  private hover = new SuggestionHover();
+  private sources: SourceCard[] = [];
+  private cardToken?: string;
+  private selectedSource?: SourceCard & { locked: boolean };
+  private sourceFocus = 0;
   private contextPacket?: ContextPacket;
   private lastRequest?: {
     prompt: string;
@@ -182,6 +190,11 @@ export class ResearchCopilot
     this.disposables.push(
       vscode.window.onDidChangeActiveTextEditor((editor) => {
         if (editor && isTex(editor.document)) {
+          if (
+            this.editor === editor &&
+            this.cursorKey === this.selectionKey(editor)
+          )
+            return;
           this.editor = editor;
           this.cursorKey = this.selectionKey(editor);
           this.invalidate();
@@ -210,6 +223,7 @@ export class ResearchCopilot
             .getWorkspaceFolder(e.document.uri)
             ?.uri.toString() === this.root?.uri.toString()
         ) {
+          this.invalidateSource(e.document.uri);
           this.invalidate();
           this.reviewed = undefined;
           if (e.document === this.editor?.document) this.scheduleAutomatic();
@@ -322,6 +336,19 @@ export class ResearchCopilot
       case "open":
         if (typeof m.id === "string") await this.openArtifact(m.id);
         break;
+      case "reference":
+        await this.referenceAction(m.token, m.id, m.lock);
+        break;
+      case "unlockReference":
+        this.selectedSource = undefined;
+        this.publish();
+        break;
+      case "showCard":
+        await this.showCard();
+        break;
+      case "grokApiKey":
+        await this.apiKey("grok");
+        break;
       case "cite":
         if (typeof m.id === "string") await this.insertCitation(m.id);
         break;
@@ -361,6 +388,10 @@ export class ResearchCopilot
         artifactCount: this.report?.count,
         indexWarnings: this.report?.warnings,
         result: this.result,
+        sources: this.sources,
+        cardToken: this.cardToken,
+        selectedSource: this.selectedSource,
+        sourceFocus: this.sourceFocus,
         context: this.contextPacket,
         pins: this.projectState.pins,
         excluded: this.projectState.excluded,
@@ -378,6 +409,10 @@ export class ResearchCopilot
     this.epoch++;
     this.abort?.abort();
     this.ghost = undefined;
+    this.hover.clear();
+    this.cardToken = undefined;
+    this.sources = [];
+    if (!this.selectedSource?.locked) this.selectedSource = undefined;
     this.diagnostics.clear();
     if (clearResult) {
       if (this.result)
@@ -409,6 +444,7 @@ export class ResearchCopilot
     this.publish();
   }
   private resetIndex() {
+    this.selectedSource = undefined;
     clearTimeout(this.watchTimer);
     this.pendingFiles.clear();
     this.watcher?.dispose();
@@ -489,6 +525,7 @@ export class ResearchCopilot
             ))
         )
           return;
+        this.invalidateSource(uri, configChange);
         this.invalidate();
         this.pendingFiles.add(configChange ? "*" : uri.fsPath);
         clearTimeout(this.watchTimer);
@@ -536,6 +573,7 @@ export class ResearchCopilot
   async refresh() {
     await this.ensureIndex();
     this.invalidate();
+    this.selectedSource = undefined;
     this.status = "Refreshing local index…";
     this.publish();
     this.report = await this.index!.scan();
@@ -597,15 +635,15 @@ export class ResearchCopilot
   ): Promise<ResearchModelBackend> {
     const kind = this.backendKind(mode);
     if (kind === "codex") return this.getCodex();
-    if (kind !== "local" && kind !== "openai")
+    if (kind !== "local" && kind !== "openai" && kind !== "grok")
       throw new Error("Unknown backend in settings");
     return new HttpBackend({
       kind,
-      model: this.setting(kind === "local" ? "localModel" : "openaiModel", ""),
+      model: this.setting(`${kind}Model`, kind === "grok" ? "grok-4.6" : ""),
       endpoint: this.setting("localEndpoint", "http://127.0.0.1:11434/v1"),
       apiKey:
-        kind === "openai"
-          ? await this.extension.secrets.get("openai-api-key")
+        kind !== "local"
+          ? await this.extension.secrets.get(`${kind}-api-key`)
           : undefined,
     });
   }
@@ -766,7 +804,9 @@ export class ResearchCopilot
         const label =
           backendKind === "codex"
             ? "Codex / ChatGPT"
-            : "OpenAI API (separate billing)";
+            : backendKind === "grok"
+              ? "Grok / xAI API (separate billing)"
+              : "OpenAI API (separate billing)";
         if (
           (await vscode.window.showInformationMessage(
             `Send selected manuscript excerpts and retrieved project evidence to ${label}? Your files stay local. Request contents are inspectable afterward.`,
@@ -847,6 +887,10 @@ export class ResearchCopilot
         )
           return;
         this.result = resolveSuggestion(suggestion, unchanged);
+        this.sources = sourceCards(this.result, unchanged);
+        this.cardToken = mode === "write" ? undefined : randomUUID();
+        if (mode === "guide")
+          this.hover.set(editor, this.result, this.sources, this.cardToken!);
         this.lastRequest.resolved = this.result;
         if (question)
           this.history.push({ role: "assistant", text: suggestion.text });
@@ -899,6 +943,61 @@ export class ResearchCopilot
       await vscode.commands.executeCommand(
         "editor.action.inlineSuggest.trigger",
       );
+    if (mode === "guide" && this.cardToken && !automatic)
+      await this.hover.show();
+  }
+  async showCard() {
+    if (this.mode !== "guide" || !this.cardToken) {
+      this.status =
+        "Choose GUIDE and request a suggestion to show an editor card.";
+      this.publish();
+      return;
+    }
+    await this.hover.show();
+  }
+  private invalidateSource(uri: vscode.Uri, all = false) {
+    if (!this.selectedSource || !this.root) return;
+    const relative = path
+      .relative(this.root.uri.fsPath, uri.fsPath)
+      .split(path.sep)
+      .join("/");
+    if (
+      all ||
+      relative === this.selectedSource.artifact.path ||
+      relative.endsWith(".bib")
+    )
+      this.selectedSource = undefined;
+  }
+  async referenceAction(token: unknown, id: unknown, lock: unknown) {
+    if (
+      typeof token !== "string" ||
+      token !== this.cardToken ||
+      typeof id !== "string" ||
+      typeof lock !== "boolean"
+    )
+      return;
+    const selected = this.sources.find((s) => s.artifact.id === id);
+    if (!selected || !this.index) return;
+    const epoch = this.epoch;
+    const current = await this.index.get(id);
+    if (epoch !== this.epoch || token !== this.cardToken) return;
+    if (!current || current.hash !== selected.artifact.hash) {
+      this.selectedSource = undefined;
+      this.invalidate();
+      return;
+    }
+    const uri = await this.safeUri(current.path);
+    if (
+      epoch !== this.epoch ||
+      vscode.workspace.textDocuments.some(
+        (d) => d.uri.toString() === uri.toString() && d.isDirty,
+      )
+    )
+      return;
+    this.selectedSource = { ...selected, locked: lock };
+    this.sourceFocus++;
+    await vscode.commands.executeCommand("researchCopilot.sidebar.focus");
+    this.publish();
   }
   private async safeUri(relative: string) {
     if (!this.root) throw new Error("No local workspace");
@@ -970,6 +1069,12 @@ export class ResearchCopilot
   private async updateControl(action: "pin" | "exclude", id: string) {
     await this.ensureIndex();
     this.invalidate();
+    if (
+      action === "exclude" &&
+      (this.selectedSource?.artifact.id === id ||
+        this.selectedSource?.artifact.path === id)
+    )
+      this.selectedSource = undefined;
     this.projectState = await this.index!.update(action, { id });
     this.status = "Context controls saved locally.";
     this.publish();
@@ -1083,9 +1188,9 @@ export class ResearchCopilot
         .getConfiguration("researchCopilot")
         .update("model", choice.id, vscode.ConfigurationTarget.Global);
   }
-  async apiKey() {
+  async apiKey(kind: "openai" | "grok" = "openai") {
     const key = await vscode.window.showInputBox({
-      title: "OpenAI API key (separate API billing)",
+      title: `${kind === "grok" ? "Grok / xAI" : "OpenAI"} API key (separate API billing)`,
       password: true,
       ignoreFocusOut: true,
       prompt:
@@ -1093,8 +1198,40 @@ export class ResearchCopilot
     });
     if (key !== undefined) {
       if (key.trim())
-        await this.extension.secrets.store("openai-api-key", key.trim());
-      else await this.extension.secrets.delete("openai-api-key");
+        await this.extension.secrets.store(`${kind}-api-key`, key.trim());
+      else await this.extension.secrets.delete(`${kind}-api-key`);
+      this.invalidate();
+      if (kind === "grok" && key.trim()) {
+        const choice = await vscode.window.showQuickPick(
+          [
+            "Use Grok for all modes",
+            "Use Grok for WRITE only",
+            "Keep current backend",
+          ],
+          { title: "Grok key saved securely. Choose where to use it." },
+        );
+        const config = vscode.workspace.getConfiguration(
+          "researchCopilot",
+          this.root?.uri,
+        );
+        if (choice === "Use Grok for all modes") {
+          await config.update(
+            "backend",
+            "grok",
+            vscode.ConfigurationTarget.Workspace,
+          );
+          await config.update(
+            "writeBackend",
+            "same",
+            vscode.ConfigurationTarget.Workspace,
+          );
+        } else if (choice === "Use Grok for WRITE only")
+          await config.update(
+            "writeBackend",
+            "grok",
+            vscode.ConfigurationTarget.Workspace,
+          );
+      }
     }
   }
   async setup() {
@@ -1107,11 +1244,13 @@ export class ResearchCopilot
     const choice = await vscode.window.showInformationMessage(
       `${problem}Python: ${this.python()} · PDF support: ${this.report?.capabilities.pdf ? "ready" : "missing"} · ${this.report?.count ?? 0} indexed artifacts. Suggestions default to explicit triggers.`,
       "Sign in with ChatGPT",
+      "Set Grok API key",
       "Choose model",
       "Settings",
       "Configure project",
     );
     if (choice === "Sign in with ChatGPT") await this.signIn();
+    if (choice === "Set Grok API key") await this.apiKey("grok");
     if (choice === "Choose model") await this.selectModel();
     if (choice === "Settings")
       await vscode.commands.executeCommand(
@@ -1254,6 +1393,9 @@ export class ResearchCopilot
       busy: this.busy,
       catalog: this.catalog,
       ghost: this.ghost,
+      sources: this.sources,
+      cardToken: this.cardToken,
+      selectedSource: this.selectedSource,
       lastInlineRequest: this.lastInlineRequest,
     };
   }
@@ -1267,6 +1409,7 @@ export class ResearchCopilot
     this.statusbar.dispose();
     this.output.dispose();
     this.diagnostics.dispose();
+    this.hover.dispose();
     this.disposables.forEach((d) => d.dispose());
   }
 }
@@ -1291,6 +1434,10 @@ export function activate(context: vscode.ExtensionContext) {
       reindex: () => controller.refresh(),
       configure: () => controller.configure(),
       apiKey: () => controller.apiKey(),
+      grokApiKey: () => controller.apiKey("grok"),
+      showCard: () => controller.showCard(),
+      referenceAction: (token, id, lock) =>
+        controller.referenceAction(token, id, lock),
       inspectContext: () => controller.inspect(),
       reviewEdit: () => controller.reviewEdit(),
       applyEdit: () => controller.applyEdit(),

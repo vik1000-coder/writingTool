@@ -130,3 +130,65 @@ test("PDF zoom controls change displayed page dimensions and preserve exact quot
   });
   dom.window.close();
 });
+test("locked source shows highlighted local quote and separate AI notes without markup execution", () => {
+  const dom = new JSDOM(html, { runScripts: "outside-only" });
+  const messages: any[] = [];
+  (dom.window as any).acquireVsCodeApi = () => ({
+    getState: () => ({}),
+    setState: () => {},
+    postMessage: (m: any) => messages.push(m),
+  });
+  dom.window.eval(readFileSync("media/sidebar.js", "utf8"));
+  const quote = "Verbatim <script>danger()</script>\nOriginal spacing.";
+  const selectedSource = {
+    locked: true,
+    artifact: {
+      id: "pdf:one",
+      hash: "h",
+      kind: "pdf",
+      title: "Real title",
+      path: "one.pdf",
+      text: quote,
+      locator: { page: 2 },
+      metadata: {},
+    },
+    summary: "AI summary",
+    relevance: "Helps the active paragraph",
+  };
+  dom.window.dispatchEvent(
+    new dom.window.MessageEvent("message", {
+      data: {
+        type: "state",
+        state: { mode: "guide", selectedSource, sourceFocus: 1 },
+      },
+    }),
+  );
+  assert.equal(dom.window.document.querySelector("mark")?.textContent, quote);
+  assert.ok(
+    dom.window.document
+      .querySelector("main")!
+      .textContent!.includes("AI summary"),
+  );
+  assert.ok(
+    dom.window.document
+      .querySelector("main")!
+      .textContent!.includes("Helps the active paragraph"),
+  );
+  assert.equal(dom.window.document.querySelectorAll("script").length, 0);
+  const unlock = [...dom.window.document.querySelectorAll("button")].find(
+    (b) => b.textContent === "Unlock reference",
+  ) as HTMLButtonElement;
+  unlock.click();
+  assert.equal(messages.at(-1).type, "unlockReference");
+  dom.window.dispatchEvent(
+    new dom.window.MessageEvent("message", {
+      data: { type: "state", state: { mode: "guide", sourceFocus: 1 } },
+    }),
+  );
+  assert.equal(
+    dom.window.document.querySelector("mark"),
+    null,
+    "Removed source must never retain a stale quote",
+  );
+  dom.window.close();
+});

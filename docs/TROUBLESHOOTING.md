@@ -109,3 +109,13 @@ For “Manuscript changed after review,” request a new proposal and review the
 Try refresh first. For a corrupt SQLite cache, use the [cache rebuild instructions](CONFIGURATION.md#local-storage-backups-and-removal); retain your state and configuration files. Disabling request logging does not delete existing logs.
 
 For an ordinary bug report, include OS, VS Code and extension versions, backend/CLI version, steps to reproduce, the exact error, and a minimal **synthetic** project. Report whether the issue occurs in a development window or an installed VSIX. Include test results if you ran them. Never attach credentials, the full index, request logs, or private research by default. Security-sensitive reports should follow the policy linked from the [guide index](README.md).
+
+## Grok authentication or model errors
+
+Run **Research Copilot: Set Grok API Key** to replace the stored key, and confirm the workspace uses `backend: "grok"` (or `writeBackend: "grok"` for WRITE only). A 401/403 response usually requires checking key permissions or account access; a model error requires an available structured-output model in `grokModel`. Check credits/rate limits in your xAI account for billing or 429 errors. Error bodies and keys are not echoed into the extension output. No request is retried or routed to another cloud provider automatically.
+
+## The GUIDE box or locked quotation disappeared
+
+GUIDE uses a native hover and a ◇ marker, not ghost text. Press Esc to dismiss the hover, then hover over the marker or run **Show Suggestion Card** to reopen it. Edits/cursor moves invalidate the suggestion; request again at the new position. Automatic requests show the marker without opening the hover. WRITE intentionally has no GUIDE hover.
+
+Use **Lock reference**, not just **View source**, to hold a quote while navigating. Locks clear when the source changes, is excluded, or the project index/configuration resets. A bibliography entry without a selected PDF passage cannot provide a full-text quotation. Keep Research Copilot in VS Code's primary sidebar if you want the quote on the left.

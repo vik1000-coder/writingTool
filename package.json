@@ -2,7 +2,7 @@
   "name": "research-copilot",
   "displayName": "Research Copilot",
   "description": "Local-first LaTeX writing assistance with inspectable scientific evidence.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "research-copilot",
   "private": true,
   "license": "MIT",
@@ -117,6 +117,14 @@
       {
         "command": "researchCopilot.setup",
         "title": "Research Copilot: Check Local Setup"
+      },
+      {
+        "command": "researchCopilot.grokApiKey",
+        "title": "Research Copilot: Set Grok API Key"
+      },
+      {
+        "command": "researchCopilot.showCard",
+        "title": "Research Copilot: Show Suggestion Card"
       }
     ],
     "keybindings": [
@@ -140,10 +148,11 @@
           "enum": [
             "codex",
             "openai",
+            "grok",
             "local"
           ],
           "default": "codex",
-          "description": "Model backend. The OpenAI API is billed separately from ChatGPT."
+          "description": "Model backend. OpenAI and Grok API usage is billed separately from chat subscriptions."
         },
         "researchCopilot.writeBackend": {
           "type": "string",
@@ -151,6 +160,7 @@
             "same",
             "codex",
             "openai",
+            "grok",
             "local"
           ],
           "default": "same",
@@ -216,6 +226,11 @@
           "type": "boolean",
           "default": false,
           "description": "Opt-in local request/response logs under .research-copilot/logs. May contain unpublished research."
+        },
+        "researchCopilot.grokModel": {
+          "type": "string",
+          "default": "grok-4.6",
+          "description": "xAI model ID supporting structured outputs. Used only with the Grok backend."
         }
       }
     }

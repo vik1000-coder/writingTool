@@ -80,6 +80,7 @@ export interface EditProposal {
   replacement: string;
 }
 export interface Suggestion {
+  source_notes?: { artifact_id: string; summary: string; relevance: string }[];
   mode: ContextPacket["mode"];
   title: string;
   text: string;

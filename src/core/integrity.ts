@@ -26,6 +26,10 @@ export const OUTPUT_SCHEMA = object({
   evidence_ids: strings,
   outline_ids: strings,
   citation_keys: strings,
+  source_notes: {
+    type: "array",
+    items: object({ artifact_id: string, summary: string, relevance: string }),
+  },
   claims: {
     type: "array",
     items: object({
@@ -152,12 +156,28 @@ export function validateSuggestion(
       structure: "Argument structure",
       chat: "Research Copilot",
     }[mode];
+  const evidenceIds = list(r.evidence_ids);
+  const notes = r.source_notes ?? [];
+  if (!Array.isArray(notes) || notes.length > 50)
+    throw new Error("Invalid source notes");
+  const sourceNotes = notes.map((value) => {
+    const n = record(value);
+    const id = text(n.artifact_id, 1000);
+    if (!evidenceIds.includes(id))
+      throw new Error("Source note must refer to selected evidence");
+    return {
+      artifact_id: id,
+      summary: text(n.summary, 2000),
+      relevance: text(n.relevance, 2000),
+    };
+  });
   return {
     mode,
     title,
     text: text(r.text),
     insert_text: insert,
-    evidence_ids: list(r.evidence_ids),
+    evidence_ids: evidenceIds,
+    source_notes: sourceNotes,
     outline_ids: list(r.outline_ids),
     citation_keys: list(r.citation_keys),
     claims,
@@ -230,6 +250,7 @@ export function resolveSuggestion(
     return [a];
   });
   const allProse = [
+    ...(suggestion.source_notes ?? []).flatMap((n) => [n.summary, n.relevance]),
     suggestion.text,
     suggestion.insert_text,
     suggestion.edit?.replacement ?? "",

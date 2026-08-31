@@ -78,6 +78,15 @@ export async function run() {
             : "with progressive ESS reaching 42."
           : "",
       evidence_ids: [pdf?.id, result?.id].filter(Boolean),
+      source_notes: pdf
+        ? [
+            {
+              artifact_id: pdf.id,
+              summary: "A synthetic comparison of sampling approaches.",
+              relevance: "Context for the comparison at the cursor.",
+            },
+          ]
+        : [],
       outline_ids: [],
       citation_keys: [],
       claims:
@@ -176,12 +185,94 @@ export async function run() {
     console.log(
       "PASS GUIDE, EVIDENCE, FIGURE/TABLE, STRUCTURE and read-only manuscript",
     );
+    await api.setMode("guide");
+    await api.suggest();
+    const cardState = api.getState();
+    const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+      "vscode.executeHoverProvider",
+      uri,
+      editor.selection.active,
+    );
+    assert.ok(
+      hovers?.some((h) =>
+        h.contents.some(
+          (c) =>
+            typeof c !== "string" &&
+            "value" in c &&
+            c.value.includes("Next argumentative step"),
+        ),
+      ),
+      "Native GUIDE hover must contain the escaped suggestion text",
+    );
+    const sourceCard = cardState.sources.find(
+      (s: any) => s.artifact.kind === "pdf",
+    );
+    assert.ok(sourceCard, "Fixture must have a PDF source card");
+    await vscode.commands.executeCommand(
+      "researchCopilot.referenceAction",
+      cardState.cardToken,
+      sourceCard.artifact.id,
+      true,
+    );
+    assert.equal(
+      api.getState().selectedSource?.artifact.text,
+      sourceCard.artifact.text,
+    );
+    assert.equal(api.getState().selectedSource?.locked, true);
+    editor.selection = new vscode.Selection(
+      doc.positionAt(0),
+      doc.positionAt(0),
+    );
+    await delay(100);
+    assert.equal(
+      api.getState().cardToken,
+      undefined,
+      "Cursor movement removes stale card",
+    );
+    assert.equal(
+      api.getState().selectedSource?.locked,
+      true,
+      "Locked quote survives manuscript navigation",
+    );
+    await vscode.commands.executeCommand(
+      "researchCopilot.referenceAction",
+      cardState.cardToken,
+      sourceCard.artifact.id,
+      false,
+    );
+    assert.equal(
+      api.getState().selectedSource?.locked,
+      true,
+      "Stale hover action cannot replace lock",
+    );
+    await api.ready();
+    const pdfPath = path.join(root, sourceCard.artifact.path);
+    const pdfBytes = await fs.readFile(pdfPath);
+    await fs.writeFile(pdfPath, pdfBytes);
+    await until(
+      () => !api.getState().selectedSource,
+      "Source file change must invalidate locked quotation",
+    );
+    await delay(650);
+    editor.selection = new vscode.Selection(
+      doc.positionAt(at),
+      doc.positionAt(at),
+    );
+    await delay(100);
+    console.log(
+      "PASS native GUIDE card, exact locked quote, navigation and stale source/action invalidation",
+    );
     editor = await vscode.window.showTextDocument(doc);
     await vscode.commands.executeCommand(
       "workbench.action.focusActiveEditorGroup",
     );
     await api.setMode("write");
     await api.suggest();
+    assert.equal(
+      api.getState().cardToken,
+      undefined,
+      "WRITE must use ghost text, not a GUIDE card",
+    );
     assert.equal(
       api.getState().result?.insertable,
       true,
@@ -296,6 +387,20 @@ export async function run() {
     assert.equal(doc.getText(), original);
     console.log("PASS stale reviewed edit rejection");
 
+    await api.setMode("evidence");
+    await api.suggest();
+    const dataState = api.getState();
+    const dataCard = dataState.sources.find((s: any) =>
+      s.artifact.path.endsWith("beta_sweep.csv"),
+    );
+    assert.ok(dataCard);
+    await vscode.commands.executeCommand(
+      "researchCopilot.referenceAction",
+      dataState.cardToken,
+      dataCard.artifact.id,
+      true,
+    );
+    assert.equal(api.getState().selectedSource?.locked, true);
     const sourceDoc = await vscode.workspace.openTextDocument(
       vscode.Uri.file(path.join(root, "results/beta_sweep.csv")),
     );
@@ -304,6 +409,11 @@ export async function run() {
     dirtyEdit.insert(sourceDoc.uri, new vscode.Position(0, 0), "UNSAVED,");
     await vscode.workspace.applyEdit(dirtyEdit);
     await until(() => sourceDoc.isDirty, "Source document must be dirty");
+    assert.equal(
+      api.getState().selectedSource,
+      undefined,
+      "Dirty source buffer clears its locked quotation",
+    );
     await api.setMode("evidence");
     await api.suggest();
     assert.ok(

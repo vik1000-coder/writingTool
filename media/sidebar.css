@@ -200,6 +200,19 @@ blockquote {
   background: var(--vscode-textBlockQuote-background);
   white-space: pre-wrap;
 }
+mark {
+  color: inherit;
+  background: var(--vscode-editor-findMatchHighlightBackground, #d7ba7d55);
+  box-decoration-break: clone;
+}
+.locked-source blockquote {
+  max-height: 340px;
+  overflow-y: auto;
+}
+.locked-source small {
+  display: block;
+  margin-top: 10px;
+}
 code,
 pre {
   font-family: var(--vscode-editor-font-family, monospace);
