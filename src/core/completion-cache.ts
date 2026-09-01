@@ -3,6 +3,8 @@ export interface CompletionSnapshot {
   uri: string;
   before: string;
   after: string;
+  /** Hash of an explicitly highlighted manuscript passage, when present. */
+  focus?: string;
 }
 interface Entry<T> extends CompletionSnapshot {
   insertText: string;
@@ -57,6 +59,7 @@ export class CompletionCache<T> {
       if (
         e.scope === snapshot.scope &&
         e.uri === snapshot.uri &&
+        e.focus === snapshot.focus &&
         e.before === snapshot.before &&
         e.after === snapshot.after
       )
@@ -87,6 +90,7 @@ export class CompletionCache<T> {
       if (
         e.scope !== snapshot.scope ||
         e.uri !== snapshot.uri ||
+        e.focus !== snapshot.focus ||
         e.after !== snapshot.after ||
         !snapshot.before.startsWith(e.before)
       )

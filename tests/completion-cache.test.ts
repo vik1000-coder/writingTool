@@ -54,3 +54,13 @@ test("WRITE cache is bounded by bytes/LRU count, replaces regenerations, and cle
   assert.equal(cache.size, 0);
   assert.equal(cache.bytes, 0);
 });
+test("highlight-focused completions never leak into ordinary cursor completions", () => {
+  const cache = new CompletionCache<number>();
+  cache.put({ ...snapshot, focus: "selected-a" }, "focused", 1);
+  assert.equal(cache.find(snapshot), undefined);
+  assert.equal(cache.find({ ...snapshot, focus: "selected-b" }), undefined);
+  assert.equal(
+    cache.find({ ...snapshot, focus: "selected-a" })?.remaining,
+    "focused",
+  );
+});

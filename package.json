@@ -2,7 +2,7 @@
   "name": "research-copilot",
   "displayName": "Research Copilot",
   "description": "Local-first research writing assistance for LaTeX and plain text with inspectable evidence.",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "publisher": "research-copilot",
   "private": true,
   "license": "MIT",
@@ -132,6 +132,14 @@
       {
         "command": "researchCopilot.clearCache",
         "title": "Research Copilot: Clear Suggestion Cache"
+      },
+      {
+        "command": "researchCopilot.writeGhost",
+        "title": "Research Copilot: Show or Generate Ghost Text"
+      },
+      {
+        "command": "researchCopilot.suggestSelection",
+        "title": "Research Copilot: Suggest for Highlighted Text"
       }
     ],
     "keybindings": [
@@ -140,6 +148,18 @@
         "key": "ctrl+alt+space",
         "mac": "cmd+alt+space",
         "when": "editorLangId == latex || editorLangId == tex || editorLangId == plaintext"
+      },
+      {
+        "command": "researchCopilot.writeGhost",
+        "key": "ctrl+alt+g",
+        "mac": "cmd+alt+g",
+        "when": "editorTextFocus && (editorLangId == latex || editorLangId == tex || editorLangId == plaintext)"
+      },
+      {
+        "command": "researchCopilot.suggestSelection",
+        "key": "ctrl+alt+h",
+        "mac": "cmd+alt+h",
+        "when": "editorTextFocus && editorHasSelection && (editorLangId == latex || editorLangId == tex || editorLangId == plaintext)"
       },
       {
         "command": "researchCopilot.cancel",

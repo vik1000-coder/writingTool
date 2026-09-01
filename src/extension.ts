@@ -66,6 +66,13 @@ type SuggestOptions = {
   triggerInline?: boolean;
   regenerate?: boolean;
   focusInline?: boolean;
+  selection?: SelectionFocus;
+};
+type SelectionFocus = {
+  uri: string;
+  version: number;
+  start: number;
+  end: number;
 };
 
 export class ResearchCopilot
@@ -521,7 +528,67 @@ export class ResearchCopilot
   }
   private selectionKey(editor: vscode.TextEditor) {
     const s = editor.selection;
-    return `${editor.document.uri}:${s.active.line}:${s.active.character}:${s.anchor.line}:${s.anchor.character}`;
+    // Selection direction is an editor gesture, not a context change. Using
+    // the normalized range also prevents a backward highlight followed by
+    // command-driven normalization from cancelling its own request.
+    return `${editor.document.uri}:${s.start.line}:${s.start.character}:${s.end.line}:${s.end.character}`;
+  }
+  private selectedPassage(
+    editor: vscode.TextEditor,
+  ): SelectionFocus | undefined {
+    if (editor.selection.isEmpty) return;
+    return {
+      uri: editor.document.uri.toString(),
+      version: editor.document.version,
+      start: editor.document.offsetAt(editor.selection.start),
+      end: editor.document.offsetAt(editor.selection.end),
+    };
+  }
+  private selectionCacheKey(
+    document: vscode.TextDocument,
+    selection?: SelectionFocus,
+  ) {
+    if (!selection) return undefined;
+    if (
+      selection.uri !== document.uri.toString() ||
+      selection.version !== document.version ||
+      selection.start < 0 ||
+      selection.end > document.getText().length ||
+      selection.start >= selection.end
+    )
+      throw new Error(
+        "The highlighted passage changed. Select it again and retry.",
+      );
+    return hashText(
+      `${selection.start}:${selection.end}:${document
+        .getText()
+        .slice(selection.start, selection.end)}`,
+    );
+  }
+  private targetSelection(
+    editor: vscode.TextEditor,
+    selection: SelectionFocus,
+    collapse: boolean,
+  ) {
+    this.selectionCacheKey(editor.document, selection);
+    const start = editor.document.positionAt(selection.start),
+      end = editor.document.positionAt(selection.end);
+    editor.selection = collapse
+      ? new vscode.Selection(end, end)
+      : new vscode.Selection(start, end);
+    editor.revealRange(
+      new vscode.Range(start, end),
+      vscode.TextEditorRevealType.InCenterIfOutsideViewport,
+    );
+    this.editor = editor;
+    this.cursorKey = this.selectionKey(editor);
+  }
+  private activeManuscript() {
+    const active = vscode.window.activeTextEditor;
+    if (active && isManuscript(active.document)) return active;
+    return this.editor && isManuscript(this.editor.document)
+      ? this.editor
+      : undefined;
   }
   cancel() {
     this.invalidate();
@@ -753,6 +820,7 @@ export class ResearchCopilot
     mode: ContextPacket["mode"],
     editor: vscode.TextEditor,
     question?: string,
+    selection?: SelectionFocus,
   ): Promise<ContextPacket> {
     const index = this.index!,
       root = this.root!.uri.fsPath;
@@ -761,9 +829,14 @@ export class ResearchCopilot
       .relative(root, editor.document.uri.fsPath)
       .split(path.sep)
       .join("/");
-    const offset = editor.document.offsetAt(editor.selection.active);
+    this.selectionCacheKey(editor.document, selection);
+    const offset =
+      selection?.end ?? editor.document.offsetAt(editor.selection.active);
     const cursor = cursorContext(text, offset, parseManuscript(file, text));
-    const query = `${cursor.headings.map((h) => h.title).join(" ")} ${cursor.paragraph.slice(-1200)} ${question ?? ""}`;
+    const selectedText = selection
+      ? text.slice(selection.start, selection.end)
+      : "";
+    const query = `${cursor.headings.map((h) => h.title).join(" ")} ${selectedText.slice(0, 2000)} ${cursor.paragraph.slice(-1200)} ${question ?? ""}`;
     const kinds: ArtifactKind[] =
       mode === "structure"
         ? ["outline", "tex", "figure", "table"]
@@ -843,6 +916,9 @@ export class ResearchCopilot
       path: file,
       text,
       offset,
+      ...(selection
+        ? { selection: { start: selection.start, end: selection.end } }
+        : {}),
       artifacts: currentArtifacts,
       pins: this.projectState.pins,
       excluded: this.projectState.excluded,
@@ -877,14 +953,17 @@ export class ResearchCopilot
         !question &&
         mode === "write" &&
         !regenerate &&
-        (await this.reuseWrite())
-      )
+        (await this.reuseWrite(undefined, undefined, options.selection))
+      ) {
+        if (triggerInline) await this.showGhost(focusInline);
         return;
+      }
       await this.generateSuggestion(
         question,
         automatic,
         triggerInline,
         focusInline,
+        options.selection,
       );
     })();
     this.suggestionTask = task;
@@ -903,6 +982,7 @@ export class ResearchCopilot
     automatic = false,
     triggerInline = true,
     focusInline = false,
+    selection?: SelectionFocus,
   ) {
     if (
       !question &&
@@ -927,6 +1007,7 @@ export class ResearchCopilot
       throw new Error(
         "Open a .tex or .txt manuscript and place the cursor where you want help.",
       );
+    const selectionFocus = this.selectionCacheKey(editor.document, selection);
     if (
       editor.document.uri.scheme !== "file" ||
       vscode.workspace
@@ -984,6 +1065,7 @@ export class ResearchCopilot
       uri: editor.document.uri.toString(),
       before: source.slice(0, offset),
       after: source.slice(offset),
+      ...(selectionFocus ? { focus: selectionFocus } : {}),
     };
     const abort = new AbortController();
     this.abort = abort;
@@ -991,7 +1073,7 @@ export class ResearchCopilot
     this.status = "Selecting project context…";
     this.publish();
     try {
-      const packet = await this.assemble(mode, editor, question);
+      const packet = await this.assemble(mode, editor, question, selection);
       if (epoch !== this.epoch || abort.signal.aborted) return;
       const prompt = buildPrompt(
         packet,
@@ -1171,6 +1253,51 @@ export class ResearchCopilot
       this.publish();
     }
   }
+  async writeGhost() {
+    const editor = this.activeManuscript();
+    if (!editor)
+      throw new Error(
+        "Open a .tex or .txt manuscript and place the cursor where you want ghost text.",
+      );
+    const selection = this.selectedPassage(editor);
+    if (this.mode !== "write") await this.setMode("write");
+    if (selection) {
+      this.invalidate();
+      this.targetSelection(editor, selection, true);
+    } else if (
+      this.ghost?.uri === editor.document.uri.toString() &&
+      this.ghost.version === editor.document.version &&
+      this.ghost.offset === editor.document.offsetAt(editor.selection.active)
+    ) {
+      await this.showGhost(true);
+      return;
+    }
+    await this.suggest(undefined, {
+      focusInline: true,
+      regenerate: false,
+      selection,
+    });
+  }
+  async suggestSelection() {
+    const editor = this.activeManuscript();
+    if (!editor)
+      throw new Error(
+        "Open a .tex or .txt manuscript and highlight a passage.",
+      );
+    const selection = this.selectedPassage(editor);
+    if (!selection)
+      throw new Error(
+        "Highlight a manuscript passage before using Suggest for Highlighted Text.",
+      );
+    if (this.mode === "off") await this.setMode("guide");
+    else this.invalidate();
+    this.targetSelection(editor, selection, this.mode === "write");
+    await this.suggest(undefined, {
+      focusInline: this.mode === "write",
+      regenerate: false,
+      selection,
+    });
+  }
   private cacheScope() {
     const kind = this.backendKind("write");
     const model =
@@ -1182,6 +1309,7 @@ export class ResearchCopilot
   private async reuseWrite(
     document?: vscode.TextDocument,
     position?: vscode.Position,
+    selection?: SelectionFocus,
   ) {
     if (
       !this.setting("cacheSuggestions", true) ||
@@ -1202,12 +1330,14 @@ export class ResearchCopilot
     )
       return false;
     const offset = editor.document.offsetAt(at),
-      source = editor.document.getText();
+      source = editor.document.getText(),
+      focus = this.selectionCacheKey(editor.document, selection);
     const hit = this.writeCache.find({
       scope: this.cacheScope(),
       uri: editor.document.uri.toString(),
       before: source.slice(0, offset),
       after: source.slice(offset),
+      ...(focus ? { focus } : {}),
     });
     if (!hit) return false;
     const epoch = this.epoch,
@@ -1811,6 +1941,8 @@ export function activate(context: vscode.ExtensionContext) {
       apiKey: () => controller.apiKey(),
       grokApiKey: () => controller.apiKey("grok"),
       clearCache: () => controller.clearCache(),
+      writeGhost: () => controller.writeGhost(),
+      suggestSelection: () => controller.suggestSelection(),
       showCard: () => controller.showCard(),
       referenceAction: (token, id, lock) =>
         controller.referenceAction(token, id, lock),

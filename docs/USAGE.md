@@ -18,6 +18,20 @@ Request inspection is available **after a request is assembled**, not as a prefl
 
 All files in `examples/bridge-study` are synthetic demonstrations, including the reference PDF and numerical results. Do not cite them as scientific evidence.
 
+## Keyboard shortcuts
+
+| Action | macOS | Linux / Windows |
+| --- | --- | --- |
+| Request the current mode at the cursor | **Cmd+Option+Space** | **Ctrl+Alt+Space** |
+| Switch to WRITE and show or generate ghost text | **Cmd+Option+G** | **Ctrl+Alt+G** |
+| Apply the current mode to highlighted text | **Cmd+Option+H** | **Ctrl+Alt+H** |
+
+The ghost shortcut works at an empty cursor or with a highlighted passage. With a highlight, WRITE places the cursor at the logical end of the selected passage and offers a continuation there; it does not replace the passage. **Tab** accepts the ghost and **Esc** dismisses it. Pressing the ghost shortcut again at the same position shows the ready cached continuation without another provider request.
+
+The highlighted-text shortcut keeps the passage selected in GUIDE, EVIDENCE, FIGURE / TABLE, and STRUCTURE so the request is explicitly focused on it. In WRITE it collapses the selection to its end and offers ghost text there. If the current mode is OFF, the command switches to GUIDE. Both selection directions work. Selected text is bounded before it is sent and appears under `current.selection` in **Inspect Last Request**.
+
+Open VS Code's **Keyboard Shortcuts** editor and search for “Research Copilot” to change either binding. The shortcuts are active only while a LaTeX, TeX, or plain-text editor has focus; the highlighted-text command also requires a non-empty selection.
+
 ## Choose how much help you want
 
 Use the mode selector in the sidebar or **Research Copilot: Select Assistance Mode**.

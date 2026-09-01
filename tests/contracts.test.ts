@@ -45,6 +45,32 @@ test("Grok is the adjustable default provider for every assistance mode", () => 
   assert.ok(settings["researchCopilot.backend"].enum.includes("local"));
   assert.ok(manifest.activationEvents.includes("onLanguage:plaintext"));
   assert.match(manifest.contributes.keybindings[0].when, /plaintext/);
+  const commands = new Map<string, string>(
+    manifest.contributes.commands.map((entry: any) => [
+      entry.command,
+      entry.title,
+    ]),
+  );
+  const bindings = new Map<string, { mac?: string; when?: string }>(
+    manifest.contributes.keybindings.map((entry: any) => [
+      entry.command,
+      entry,
+    ]),
+  );
+  assert.match(commands.get("researchCopilot.writeGhost") || "", /ghost/i);
+  assert.match(
+    commands.get("researchCopilot.suggestSelection") || "",
+    /highlighted/i,
+  );
+  assert.equal(bindings.get("researchCopilot.writeGhost")?.mac, "cmd+alt+g");
+  assert.equal(
+    bindings.get("researchCopilot.suggestSelection")?.mac,
+    "cmd+alt+h",
+  );
+  assert.match(
+    bindings.get("researchCopilot.suggestSelection")?.when || "",
+    /editorHasSelection/,
+  );
   for (const mode of [
     "guide",
     "write",
@@ -108,6 +134,40 @@ test("GUIDE asks for a topic plus a small grounded reference shortlist", () => {
     prompt,
     /prefer current PDF passages over bibliography-only metadata/i,
   );
+});
+
+test("highlighted manuscript text is explicit, normalized, bounded context", () => {
+  const selected = "The highlighted result needs a focused explanation.";
+  const text = `Earlier context. ${selected} Later context.`;
+  const start = text.indexOf(selected),
+    end = start + selected.length;
+  const context = assembleContext({
+    mode: "guide",
+    path: "main.txt",
+    text,
+    offset: end,
+    selection: { start: end, end: start },
+    artifacts: [],
+    budget: 4000,
+  });
+  assert.deepEqual(context.current.selection, {
+    start,
+    end,
+    text: selected,
+    truncated: false,
+  });
+  assert.match(buildPrompt(context), /deliberately highlighted/i);
+  const large = assembleContext({
+    mode: "evidence",
+    path: "main.txt",
+    text: "x".repeat(20000),
+    offset: 20000,
+    selection: { start: 0, end: 20000 },
+    artifacts: [],
+    budget: 4000,
+  });
+  assert.equal(large.current.selection?.truncated, true);
+  assert.ok(JSON.stringify(large).length <= 4000);
 });
 
 test("mode contracts reject unexpected prose, giant continuations, unknown modes, and edits outside Chat", () => {

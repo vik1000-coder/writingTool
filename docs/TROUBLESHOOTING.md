@@ -61,6 +61,7 @@ Without the environment variable, this script uses the `codex` on PATH, which ma
 - Check the provider row below the mode selector. Grok is the default for all modes; use its **Settings** link if you intended to select Codex, OpenAI, a local model, or a separate WRITE provider.
 - OFF suppresses suggestions. GUIDE produces a sidebar card; only WRITE produces insertable ghost text.
 - Automatic suggestions are off by default. Request explicitly with **Research Copilot: Suggest / Regenerate**. Automatic GUIDE needs a sentence ending; EVIDENCE needs a paragraph boundary. FIGURE / TABLE and STRUCTURE are explicit-only.
+- For ghost text, use **Cmd+Option+G** on macOS or **Ctrl+Alt+G** on Linux/Windows. For help focused on a highlight, use **Cmd+Option+H** / **Ctrl+Alt+H**. If a binding is intercepted, open VS Code's **Keyboard Shortcuts** editor, search for “Research Copilot,” and assign another key combination.
 - A cloud backend needs consent on an explicit request before automatic requests run. Declining leaves the manuscript unchanged.
 - A sidebar WRITE request returns focus to the manuscript automatically. If you dismissed the ready continuation, click **Show ghost text** to display it again without another provider call. If it still does not render, ensure VS Code's inline suggestions are enabled (`editor.inlineSuggest.enabled`) and another extension/keybinding is not intercepting Tab.
 - Read evidence warnings. Unknown citations, unsupported numerical claims, malformed output, or stale sources can prevent insertion.

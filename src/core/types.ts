@@ -61,6 +61,12 @@ export interface ContextPacket {
     after: string;
     paragraph: string;
     headings: string[];
+    selection?: {
+      start: number;
+      end: number;
+      text: string;
+      truncated: boolean;
+    };
   };
   artifacts: Artifact[];
   excluded: string[];

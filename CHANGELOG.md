@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.3 — 2026-09-01
+
+- Add dedicated **Show or Generate Ghost Text** and **Suggest for Highlighted Text** commands with macOS and Linux/Windows keyboard shortcuts.
+- Give highlighted passages explicit, bounded request context; WRITE continues after the selection without replacing it, while other modes preserve the highlight.
+- Isolate highlighted-passage WRITE completions in the bounded session cache and reuse an already-ready ghost without another provider request.
+- Handle forward and backward selections consistently, including real VS Code editor-event timing, LaTeX, plain text, and multiple editor panes.
+- Document the shortcut workflow and VS Code keybinding customization.
+
 ## 0.3.2 — 2026-09-01
 
 - Return focus to the manuscript before showing a WRITE continuation requested from the sidebar, so native ghost text renders where the cursor was placed.

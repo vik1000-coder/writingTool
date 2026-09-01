@@ -207,6 +207,52 @@ export async function run() {
     console.log(
       "PASS GUIDE, EVIDENCE, FIGURE/TABLE, STRUCTURE and read-only manuscript",
     );
+    const selectedText = "progressive bridging with direct sampling",
+      selectedStart = doc.getText().indexOf(selectedText),
+      selectedEnd = selectedStart + selectedText.length;
+    await api.setMode("guide");
+    editor.selection = new vscode.Selection(
+      doc.positionAt(selectedEnd),
+      doc.positionAt(selectedStart),
+    );
+    await vscode.commands.executeCommand("researchCopilot.suggestSelection");
+    assert.equal(
+      api.getState().result?.suggestion.mode,
+      "guide",
+      api.getState().status,
+    );
+    assert.equal(api.getState().context.current.selection?.text, selectedText);
+    assert.ok(editor.selection.start.isEqual(doc.positionAt(selectedStart)));
+    assert.ok(editor.selection.end.isEqual(doc.positionAt(selectedEnd)));
+    assert.ok(
+      editor.selection.active.isEqual(doc.positionAt(selectedEnd)),
+      "Highlighted-text command normalizes a backward selection without clearing it",
+    );
+    editor.selection = new vscode.Selection(
+      doc.positionAt(selectedEnd),
+      doc.positionAt(selectedStart),
+    );
+    await vscode.commands.executeCommand("researchCopilot.writeGhost");
+    assert.equal(api.getState().mode, "write");
+    assert.equal(api.getState().context.current.selection?.text, selectedText);
+    assert.equal(editor.selection.isEmpty, true);
+    assert.ok(editor.selection.active.isEqual(doc.positionAt(selectedEnd)));
+    assert.equal(api.getState().ghost?.offset, selectedEnd);
+    assert.equal(doc.getText(), original);
+    const selectedGhostCalls = callCount;
+    await vscode.commands.executeCommand("researchCopilot.writeGhost");
+    assert.equal(
+      callCount,
+      selectedGhostCalls,
+      "Ghost shortcut must show an existing continuation without another model call",
+    );
+    editor.selection = new vscode.Selection(
+      doc.positionAt(at),
+      doc.positionAt(at),
+    );
+    console.log(
+      "PASS keyboard commands target highlighted text and show WRITE ghost without mutation or duplicate calls",
+    );
     await api.setMode("guide");
     await api.suggest();
     const cardState = api.getState();

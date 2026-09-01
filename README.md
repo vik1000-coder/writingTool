@@ -40,6 +40,8 @@ Or open the repository in VS Code and press **F5**. This launches a separate dev
 4. Leave **GUIDE** selected and click **Suggest next step**, or press **Cmd+Option+Space** / **Ctrl+Alt+Space**.
 5. Inspect **Evidence** and **Context** before using the suggestion.
 
+For a WRITE continuation at the cursor, press **Cmd+Option+G** on macOS or **Ctrl+Alt+G** on Linux/Windows. Highlight a passage first if the continuation should follow that passage. To apply the currently selected assistance mode specifically to highlighted text, press **Cmd+Option+H** / **Ctrl+Alt+H**. These shortcuts can be changed in VS Code's **Keyboard Shortcuts** editor by searching for “Research Copilot.”
+
 No model request runs on activation. The first explicit cloud request asks whether to send selected project context to the chosen backend. Automatic suggestions are off by default and require opt-in. All example data and PDF sources are synthetic and **must not be treated as scientific findings**.
 
 ## Assistance modes
@@ -133,7 +135,7 @@ The Codex adapter was tested with CLI **0.151.0**, including live ChatGPT-authen
 
 ```sh
 npm run package
-code --install-extension research-copilot-0.3.1.vsix
+code --install-extension research-copilot-0.3.3.vsix
 ```
 
 The VSIX contains the bundled extension, webview assets, Python helper sources, and the usage/configuration/troubleshooting guides. Development tools, models, node_modules and Python wheels are **not** bundled. For an installed VSIX, set `pythonPath` in **User Settings** to your prepared Python environment (for example the absolute path to this clone's `.venv/bin/python`, or `.venv\\Scripts\\python.exe` on Windows). A Codex executable is needed only if you select the optional Codex provider. Use **Check Local Setup** to inspect capabilities. No VS Code Marketplace publication is required. Windows remains unverified; macOS and Linux have been exercised.
