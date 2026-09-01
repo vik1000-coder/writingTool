@@ -430,6 +430,9 @@ export async function run() {
       );
     }
     assert.equal(doc.getText(), original);
+    await vscode.commands.executeCommand("workbench.action.focusRightGroup");
+    await vscode.commands.executeCommand("workbench.action.closeGroup");
+    editor = await vscode.window.showTextDocument(doc);
     console.log("PASS grounded WRITE and native completion provider");
     invented = true;
     await api.suggest();
