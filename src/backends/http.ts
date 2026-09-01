@@ -186,8 +186,22 @@ export class HttpBackend implements ResearchModelBackend {
         data += decoder.decode(value, { stream: true });
       }
       data += decoder.decode();
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === "Model response exceeds 1 MB limit"
+      )
+        throw error;
+      throw connectionError(label, error, request.signal?.aborted ?? false);
     } finally {
-      await reader.cancel();
+      // A broken socket may also make cancel() reject. The read error above is
+      // the useful, provider-labelled error and must not be replaced by a raw
+      // Undici `fetch failed` message.
+      try {
+        await reader.cancel();
+      } catch {
+        // The body has already completed or failed; there is nothing else to do.
+      }
     }
     const parsed = JSON.parse(data);
     const result =

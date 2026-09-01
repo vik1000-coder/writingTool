@@ -387,6 +387,20 @@ export async function run() {
       generatedCalls + 2,
       "Explicit regeneration bypasses the cache",
     );
+    await vscode.commands.executeCommand("workbench.action.newGroupRight");
+    await vscode.commands.executeCommand("workbench.action.focusRightGroup");
+    await vscode.commands.executeCommand("workbench.action.focusSideBar");
+    await api.showGhost();
+    assert.equal(
+      vscode.window.activeTextEditor?.document.uri.toString(),
+      doc.uri.toString(),
+      "Showing ghost text must target its manuscript when another editor group is empty",
+    );
+    assert.match(
+      api.getState().status,
+      /Ghost text shown.*Tab accepts/i,
+      "Showing a ready continuation from the sidebar must return focus to the editor",
+    );
     await vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
     await delay(400);
     assert.equal(

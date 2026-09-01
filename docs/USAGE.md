@@ -31,7 +31,7 @@ Use the mode selector in the sidebar or **Research Copilot: Select Assistance Mo
 | FIGURE / TABLE | You are deciding how to present a result | Proposes a figure, table, or no visualization using indexed project artifacts. It does not generate a plot. |
 | STRUCTURE | You want help with the argument or section plan | Uses relevant outline and manuscript context to identify missing components. |
 
-For WRITE, keep the manuscript editor focused and request a continuation. **Tab** accepts the native inline suggestion; **Esc** dismisses it. Accepting is an ordinary editor change: **Undo** reverses it. A suggestion card with an evidence warning may appear without insertable ghost text. Check the warning rather than assuming it was accepted.
+For WRITE, place the cursor in the manuscript and click **Continue in editor**. When the response is ready, Research Copilot returns focus to that cursor and shows the native inline suggestion. **Tab** accepts it; **Esc** dismisses it. The sidebar action then becomes **Show ghost text**, which displays the same ready continuation again without another provider call. Accepting is an ordinary editor change: **Undo** reverses it. A suggestion card with an evidence warning may appear without insertable ghost text. Check the warning rather than assuming it was accepted.
 
 WRITE keeps a small two-minute session cache by default. Reopening the exact cursor context, or typing an exact prefix of the offered continuation, can show the remaining ghost text without another model call. The full surrounding document, provider/model, and every source hash must still match. Explicit **Suggest / Regenerate** bypasses the cache. Use **Clear Suggestion Cache** when you want to remove it immediately; it never changes the manuscript.
 

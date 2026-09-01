@@ -157,6 +157,43 @@ test("network failures name the provider and safe cause instead of exposing fetc
       !/fetch failed|private|secret/i.test(error.message),
   );
 });
+test("response body failures are also reported as safe provider connection errors", async (t) => {
+  const context = assembleContext({
+    mode: "guide",
+    path: "main.tex",
+    text: "Text.",
+    offset: 5,
+    artifacts: [],
+    budget: 4000,
+  });
+  t.mock.method(
+    globalThis,
+    "fetch",
+    async () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.error(new TypeError("fetch failed"));
+          },
+        }),
+      ),
+  );
+  const consume = async () => {
+    for await (const _ of new HttpBackend({
+      kind: "grok",
+      model: "grok-4.6",
+      apiKey: "synthetic-key",
+    }).suggest({ context, prompt: "bounded" })) {
+      /* consume */
+    }
+  };
+  await assert.rejects(
+    consume(),
+    (error: Error) =>
+      /Grok API could not connect/i.test(error.message) &&
+      !/fetch failed/i.test(error.message),
+  );
+});
 test("provider timeouts are distinguished from user cancellation", async (t) => {
   const context = assembleContext({
     mode: "guide",

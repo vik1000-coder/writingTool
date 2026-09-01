@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2 — 2026-09-01
+
+- Return focus to the manuscript before showing a WRITE continuation requested from the sidebar, so native ghost text renders where the cursor was placed.
+- Change the ready WRITE action to **Show ghost text**, allowing the same validated continuation to be shown again without another provider call.
+- Wrap network failures that occur while reading the provider response body and prevent cleanup errors from exposing a raw `fetch failed` message.
+- Add test-first webview, HTTP stream-failure, and focused real extension-host regressions.
+
 ## 0.3.1 — 2026-09-01
 
 - Recover the first complete schema-constrained JSON object when Grok appends non-JSON commentary, while retaining the existing output, citation, evidence, and numerical integrity checks.

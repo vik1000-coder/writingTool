@@ -120,6 +120,50 @@ test("sidebar restores a saved catalog tab when the webview becomes ready", () =
   });
   dom.window.close();
 });
+test("WRITE reuses a ready continuation to show ghost text instead of charging again", () => {
+  const dom = new JSDOM(html, { runScripts: "outside-only" });
+  const messages: any[] = [];
+  (dom.window as any).acquireVsCodeApi = () => ({
+    getState: () => ({}),
+    setState: () => {},
+    postMessage: (message: unknown) => messages.push(message),
+  });
+  dom.window.eval(readFileSync("media/sidebar.js", "utf8"));
+  dom.window.dispatchEvent(
+    new dom.window.MessageEvent("message", {
+      data: {
+        type: "state",
+        state: {
+          mode: "write",
+          status: "Suggestion ready.",
+          result: {
+            suggestion: {
+              mode: "write",
+              title: "Continue the result",
+              text: "",
+              insert_text: "The effect remained stable.",
+              proposal: null,
+              edit: null,
+            },
+            evidence: [],
+            warnings: [],
+            insertable: true,
+          },
+        },
+      },
+    }),
+  );
+  const suggest = dom.window.document.getElementById(
+    "suggest",
+  ) as HTMLButtonElement;
+  assert.equal(suggest.textContent, "Show ghost text");
+  messages.length = 0;
+  suggest.click();
+  assert.deepEqual(JSON.parse(JSON.stringify(messages)), [
+    { type: "showGhost" },
+  ]);
+  dom.window.close();
+});
 test("sidebar renders model/source HTML as literal text and only sends narrow action messages", () => {
   const dom = new JSDOM(html, { runScripts: "outside-only" });
   const messages: unknown[] = [];

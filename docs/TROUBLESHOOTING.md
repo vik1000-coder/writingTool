@@ -62,7 +62,7 @@ Without the environment variable, this script uses the `codex` on PATH, which ma
 - OFF suppresses suggestions. GUIDE produces a sidebar card; only WRITE produces insertable ghost text.
 - Automatic suggestions are off by default. Request explicitly with **Research Copilot: Suggest / Regenerate**. Automatic GUIDE needs a sentence ending; EVIDENCE needs a paragraph boundary. FIGURE / TABLE and STRUCTURE are explicit-only.
 - A cloud backend needs consent on an explicit request before automatic requests run. Declining leaves the manuscript unchanged.
-- Click back into the manuscript and request again using the keyboard shortcut. Tab in the sidebar moves focus rather than accepting editor text. Ensure VS Code's inline suggestions are enabled (`editor.inlineSuggest.enabled`) and another extension/keybinding is not intercepting Tab.
+- A sidebar WRITE request returns focus to the manuscript automatically. If you dismissed the ready continuation, click **Show ghost text** to display it again without another provider call. If it still does not render, ensure VS Code's inline suggestions are enabled (`editor.inlineSuggest.enabled`) and another extension/keybinding is not intercepting Tab.
 - Read evidence warnings. Unknown citations, unsupported numerical claims, malformed output, or stale sources can prevent insertion.
 - A cursor move, document edit, mode switch, or source update can invalidate the suggestion. Regenerate at the intended position.
 
@@ -103,7 +103,7 @@ For “Manuscript changed after review,” request a new proposal and review the
 - An OpenAI API request needs its own API key and billing access; ChatGPT sign-in does not authorize this adapter.
 - Start a local server yourself and use a loopback `/v1` base URL. Non-loopback hosts and redirects are intentionally rejected.
 - Verify support for strict JSON-schema output, not just ordinary text chat. “No structured text,” refusal, or schema errors can mean the model/server cannot satisfy this contract.
-- Version 0.3.1 and later replace the opaque `fetch failed` message with safe DNS, timeout, refusal, TLS, or general connectivity guidance. Check the named network condition, including VPN/proxy/firewall state, then retry manually. Requests are never retried automatically because a failed response may still have incurred provider usage.
+- Version 0.3.2 and later replace the opaque `fetch failed` message from both connection setup and interrupted response bodies with safe DNS, timeout, refusal, TLS, or general connectivity guidance. Check the named network condition, including VPN/proxy/firewall state, then retry manually. Requests are never retried automatically because a failed response may still have incurred provider usage.
 - If Grok appends commentary after a complete structured object, 0.3.1 safely uses the first complete object and still applies all local schema/evidence checks. An incomplete object or ordinary prose remains an error.
 - HTTP errors report the status. Check the server/model configuration before retrying. There is no silent provider fallback; `writeBackend` may select a different provider specifically for WRITE.
 

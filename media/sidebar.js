@@ -656,7 +656,14 @@
   $("mode").addEventListener("change", (e) =>
     send("mode", { mode: e.target.value }),
   );
-  $("suggest").addEventListener("click", () => send("suggest"));
+  const hasReadyGhost = () =>
+    state.mode === "write" &&
+    state.result?.insertable === true &&
+    state.result.suggestion?.mode === "write" &&
+    Boolean(state.result.suggestion.insert_text);
+  $("suggest").addEventListener("click", () =>
+    send(hasReadyGhost() ? "showGhost" : "suggest"),
+  );
   $("cancel").addEventListener("click", () => send("cancel"));
   $("setup").addEventListener("click", () => send("setup"));
   $("settings").addEventListener("click", () => send("settings"));
@@ -684,9 +691,11 @@
     $("suggest").disabled = state.busy || state.mode === "off";
     $("suggest").textContent = state.busy
       ? "Thinking…"
-      : state.mode === "write"
-        ? "Continue in editor"
-        : "Suggest next step";
+      : hasReadyGhost()
+        ? "Show ghost text"
+        : state.mode === "write"
+          ? "Continue in editor"
+          : "Suggest next step";
     $("cancel").hidden = !state.busy;
     $("project-label").textContent =
       `${state.project || "Local project"} · ${state.artifactCount || 0} artifacts · Read-only suggestions`;

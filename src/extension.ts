@@ -61,6 +61,12 @@ const catalogKinds: Record<string, ArtifactKind[]> = {
   References: ["bib", "pdf"],
   Figures: ["figure", "table"],
 };
+type SuggestOptions = {
+  automatic?: boolean;
+  triggerInline?: boolean;
+  regenerate?: boolean;
+  focusInline?: boolean;
+};
 
 export class ResearchCopilot
   implements vscode.WebviewViewProvider, vscode.Disposable
@@ -205,7 +211,7 @@ export class ResearchCopilot
                 context.triggerKind ===
                   vscode.InlineCompletionTriggerKind.Invoke
               )
-                await this.suggest(undefined, false, false);
+                await this.suggest(undefined, { triggerInline: false });
             }
             if (token.isCancellationRequested) return [];
             const ghost = this.ghost;
@@ -236,10 +242,16 @@ export class ResearchCopilot
       vscode.window.onDidChangeActiveTextEditor((editor) => {
         if (editor && isManuscript(editor.document)) {
           if (
-            this.editor === editor &&
+            this.editor?.document.uri.toString() ===
+              editor.document.uri.toString() &&
             this.cursorKey === this.selectionKey(editor)
-          )
+          ) {
+            // VS Code may create a new TextEditor wrapper when an existing
+            // document is focused from another group. Keep a current handle
+            // without invalidating a suggestion at the same document/cursor.
+            this.editor = editor;
             return;
+          }
           this.editor = editor;
           this.cursorKey = this.selectionKey(editor);
           this.invalidate();
@@ -360,7 +372,10 @@ export class ResearchCopilot
         await this.setMode(validateMode(m.mode));
         break;
       case "suggest":
-        await this.suggest();
+        await this.suggest(undefined, { focusInline: true });
+        break;
+      case "showGhost":
+        await this.showGhost(true);
         break;
       case "cancel":
         this.cancel();
@@ -500,7 +515,7 @@ export class ResearchCopilot
       .slice(0, this.editor.document.offsetAt(this.editor.selection.active));
     if (shouldTrigger(this.mode, "automatic", prefix, true))
       this.triggerTimer = setTimeout(
-        () => void this.run(() => this.suggest(undefined, true)),
+        () => void this.run(() => this.suggest(undefined, { automatic: true })),
         this.setting("debounceMs", 1800),
       );
   }
@@ -847,12 +862,11 @@ export class ResearchCopilot
       packet.warnings.push(warning);
     return packet;
   }
-  async suggest(
-    question?: string,
-    automatic = false,
-    triggerInline = true,
-    regenerate = !automatic && triggerInline,
-  ) {
+  async suggest(question?: string, options: SuggestOptions = {}) {
+    const automatic = options.automatic ?? false,
+      triggerInline = options.triggerInline ?? true,
+      regenerate = options.regenerate ?? (!automatic && triggerInline),
+      focusInline = options.focusInline ?? false;
     const mode = question ? "chat" : this.mode;
     if (this.suggestionTask) {
       if (this.pendingMode === mode) await this.suggestionTask;
@@ -866,7 +880,12 @@ export class ResearchCopilot
         (await this.reuseWrite())
       )
         return;
-      await this.generateSuggestion(question, automatic, triggerInline);
+      await this.generateSuggestion(
+        question,
+        automatic,
+        triggerInline,
+        focusInline,
+      );
     })();
     this.suggestionTask = task;
     this.pendingMode = mode;
@@ -883,6 +902,7 @@ export class ResearchCopilot
     question?: string,
     automatic = false,
     triggerInline = true,
+    focusInline = false,
   ) {
     if (
       !question &&
@@ -1105,16 +1125,51 @@ export class ResearchCopilot
         this.publish();
       }
     }
-    if (
-      this.ghost &&
-      triggerInline &&
-      vscode.window.activeTextEditor === editor
-    )
-      await vscode.commands.executeCommand(
-        "editor.action.inlineSuggest.trigger",
-      );
+    if (this.ghost && triggerInline) await this.showGhost(focusInline);
     if (mode === "guide" && this.cardToken && !automatic)
       await this.hover.show();
+  }
+  async showGhost(focusEditor = true) {
+    let editor = this.editor;
+    const ghost = this.ghost;
+    if (
+      this.mode !== "write" ||
+      !editor ||
+      !ghost ||
+      ghost.uri !== editor.document.uri.toString() ||
+      ghost.version !== editor.document.version ||
+      ghost.offset !== editor.document.offsetAt(editor.selection.active)
+    ) {
+      this.status =
+        "No current ghost text. Place the cursor in the manuscript and request a WRITE continuation.";
+      this.publish();
+      return;
+    }
+    if (focusEditor)
+      editor = await vscode.window.showTextDocument(editor.document, {
+        viewColumn: editor.viewColumn,
+        preserveFocus: false,
+        preview: false,
+      });
+    if (
+      vscode.window.activeTextEditor?.document.uri.toString() !== ghost.uri ||
+      !editor ||
+      editor.document.version !== ghost.version ||
+      editor.document.offsetAt(editor.selection.active) !== ghost.offset
+    ) {
+      this.status =
+        "The suggestion belongs to another editor position. Return there or request a fresh WRITE continuation.";
+      this.publish();
+      return;
+    }
+    this.editor = editor;
+    this.cursorKey = this.selectionKey(editor);
+    await vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
+    if (focusEditor) {
+      this.status =
+        "Ghost text shown in the editor. Tab accepts; Esc dismisses.";
+      this.publish();
+    }
   }
   private cacheScope() {
     const kind = this.backendKind("write");
@@ -1777,7 +1832,8 @@ export function activate(context: vscode.ExtensionContext) {
     getState: () => controller.getState(),
     ready: () => controller.ensureIndex(),
     suggest: (question?: string) => controller.suggest(question),
-    complete: () => controller.suggest(undefined, false, false),
+    complete: () => controller.suggest(undefined, { triggerInline: false }),
+    showGhost: () => controller.showGhost(true),
     setMode: (mode: Mode) => controller.setMode(mode),
   };
 }
