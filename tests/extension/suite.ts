@@ -252,10 +252,8 @@ export async function run() {
       doc.positionAt(0),
       doc.positionAt(0),
     );
-    await delay(100);
-    assert.equal(
-      api.getState().cardToken,
-      undefined,
+    await until(
+      () => api.getState().cardToken === undefined,
       "Cursor movement removes stale card",
     );
     assert.equal(
