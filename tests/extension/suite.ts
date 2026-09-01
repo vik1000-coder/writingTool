@@ -144,6 +144,10 @@ export async function run() {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as { port: number };
   try {
+    const plainPath = path.join(root, "paper/plain-draft.txt");
+    const plainOriginal =
+      "# Results note\n\nThe synthetic comparison changes under stronger constraints.";
+    await fs.writeFile(plainPath, plainOriginal);
     await vscode.workspace
       .getConfiguration("researchCopilot")
       .update(
@@ -287,6 +291,23 @@ export async function run() {
     console.log(
       "PASS native GUIDE card, exact locked quote, navigation and stale source/action invalidation",
     );
+    const plainUri = vscode.Uri.file(plainPath);
+    const plainDoc = await vscode.workspace.openTextDocument(plainUri);
+    await vscode.languages.setTextDocumentLanguage(plainDoc, "plaintext");
+    editor = await vscode.window.showTextDocument(plainDoc);
+    editor.selection = new vscode.Selection(
+      plainDoc.positionAt(plainDoc.getText().length),
+      plainDoc.positionAt(plainDoc.getText().length),
+    );
+    await api.setMode("guide");
+    await api.suggest();
+    assert.equal(api.getState().context.current.path, "paper/plain-draft.txt");
+    assert.equal(api.getState().result?.suggestion.mode, "guide");
+    await api.setMode("write");
+    await api.suggest();
+    assert.equal(api.getState().ghost?.uri, plainUri.toString());
+    assert.equal(plainDoc.getText(), plainOriginal);
+    console.log("PASS GUIDE and WRITE operate on a plain-text manuscript");
     editor = await vscode.window.showTextDocument(doc);
     await vscode.commands.executeCommand(
       "workbench.action.focusActiveEditorGroup",

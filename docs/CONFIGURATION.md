@@ -22,7 +22,7 @@ After dependency setup, run these commands in the clone to build and install:
 
 ```sh
 npm run package
-code --install-extension research-copilot-0.2.2.vsix
+code --install-extension research-copilot-0.3.0.vsix
 ```
 
 Alternatively, use **Install from VSIX…** in VS Code's Extensions view menu and select the package file. Open your research folder in the installed extension's window and configure its runtime paths below. This installs locally; it does not publish anything. Compile your manuscript with your normal LaTeX tools; compilation is not part of this extension.
@@ -32,8 +32,8 @@ An installed VSIX contains the extension, Python helper sources, webview assets,
 ```json
 {
   "researchCopilot.pythonPath": "/absolute/path/to/writingTool/.venv/bin/python",
-  "researchCopilot.codexPath": "/absolute/path/to/codex",
-  "researchCopilot.backend": "codex",
+  "researchCopilot.backend": "grok",
+  "researchCopilot.writeBackend": "same",
   "researchCopilot.automaticSuggestions": false
 }
 ```
@@ -44,7 +44,7 @@ Paths are executable names or paths, not shell commands: do not use `source … 
 
 ## ChatGPT subscription through Codex
 
-1. Keep `researchCopilot.backend` set to `codex` (the default).
+1. Change `researchCopilot.backend` from the Grok default to `codex` in Settings. The provider row in the sidebar shows the effective choice.
 2. Ensure a compatible Codex CLI is available. This repository's locked development CLI was tested at **0.151.0**. An installed extension needs its own CLI path/PATH entry.
 3. Run **Research Copilot: Sign in with ChatGPT**, then complete the browser flow using the intended account. Codex manages the credentials; do not put them in project files.
 4. Run **Research Copilot: Select Codex Model** if you need to choose an available model. A blank `researchCopilot.model` uses Codex's configured default.
@@ -62,13 +62,15 @@ The adapter calls the Responses API with a strict JSON schema and `store: false`
 
 ### Grok / xAI API backend
 
+Grok is the default for all modes. The default routing is `backend: "grok"` and `writeBackend: "same"`; no Codex request is made unless you select Codex.
+
 1. Run **Research Copilot: Set Grok API Key** from the command palette (or choose **Set Grok API key** in **Check Local Setup**).
 2. Paste your xAI key into the masked input. It is saved in VS Code SecretStorage, never project settings or request logs. Submit an empty value to remove it. Do not paste keys into Chat or commit them to Git.
 3. Choose **Use Grok for all modes**, **Use Grok for WRITE only**, or **Keep current backend**. This changes routing for the open workspace only; it does not make a model request.
 4. Research modes default to `grokModel: "grok-4.6"`. WRITE defaults separately to `grokWriteModel: "grok-4.3"`, where the adapter disables reasoning and requests only the four fields needed for a safe continuation.
 5. Request a suggestion and approve sending selected context to **Grok / xAI API**. This consent is separate from Codex/OpenAI consent and lasts for the current project/backend session.
 
-For manual routing, set `researchCopilot.backend` to `grok` and `researchCopilot.writeBackend` to `same`. To keep Codex for guidance and use Grok for ghost text, use `backend: "codex"` and `writeBackend: "grok"`.
+Use the sidebar's **Settings** link to change providers. Set `researchCopilot.backend` to `grok` and `researchCopilot.writeBackend` to `same` for all-Grok routing. A split such as `backend: "codex"` and `writeBackend: "grok"` remains available as an explicit override.
 
 The adapter sends bounded text context to the fixed `https://api.x.ai/v1/chat/completions` endpoint with bearer authentication and a strict JSON schema, following [xAI structured-output documentation](https://docs.x.ai/developers/model-capabilities/text/structured-outputs). Stable project evidence is placed before changing cursor context and an opaque per-session conversation ID enables [xAI prompt caching](https://docs.x.ai/developers/advanced-api-usage/prompt-caching); provider cache hits remain controlled by xAI. It does not enable web/X search, code execution, or other model tools. API usage is billed by xAI; chat subscriptions do not substitute for API credentials or credits. Provider retention policies still apply. The normal tests use fixtures, not paid Grok inference.
 
@@ -104,7 +106,7 @@ All names below start with `researchCopilot.`.
 
 | Setting | Default | Accepted values / meaning |
 | --- | --- | --- |
-| `backend` | `"codex"` | `codex`, `openai`, `grok`, `local`. |
+| `backend` | `"grok"` | `grok`, `codex`, `openai`, `local`; applies to every mode unless WRITE is overridden. |
 | `writeBackend` | `"same"` | `same`, `codex`, `openai`, `grok`, `local`; applies only to WRITE. |
 | `codexPath` | `"codex"` | Codex executable; machine-scoped. Development builds prefer the repository CLI when left at this default. |
 | `pythonPath` | `"python3"` | Python 3.10+ executable; machine-scoped. Development builds prefer `.venv` when left at this default. |
@@ -155,7 +157,7 @@ Save and run **Research Copilot: Refresh Project Index**. Subsequent saved file 
 
 | Field | Meaning |
 | --- | --- |
-| `paper.root` | Main `.tex` entry point for resolving `\input`, `\include`, and `\subfile`. It does not restrict indexing to that file. If omitted, a discovered `\documentclass` file is preferred. |
+| `paper.root` | Main `.tex` entry point for resolving `\input`, `\include`, and `\subfile`, or a primary `.txt` manuscript. It does not restrict indexing to that file. If omitted, a discovered `\documentclass` file is preferred for LaTeX. |
 | `outline.path` | Exact path to the chosen Markdown/YAML outline. Without it, files with `outline` in their names are recognized. |
 | `bibliography` | List of BibTeX paths/globs. |
 | `reference_pdfs` | List of literature PDF paths/globs. |
@@ -174,7 +176,7 @@ Within a Git repository, discovery uses Git's tracked files plus untracked, non-
 
 | Resource | Supported input | Boundaries |
 | --- | --- | --- |
-| Manuscript | `.tex` | Recognized headings, includes, citations, labels, figures/tables; no arbitrary TeX macro expansion or compilation. |
+| Manuscript | `.tex`, `.txt` | LaTeX structure is parsed without macro expansion/compilation. Plain text supports `#` headings and underlined headings, cursor context, ghost text, source guidance, citation placeholders, and reviewed edits. |
 | Outline / notes | `.md`, `.yaml`, `.yml` | Markdown headings/lists or YAML node mappings; no automatic outline rewriting. |
 | Bibliography | `.bib` | Parsed entries and unique citation keys; no remote metadata lookup. |
 | Literature | Text-bearing `.pdf` | Up to 500 pages per PDF; exact extraction and local rendering, no OCR. |

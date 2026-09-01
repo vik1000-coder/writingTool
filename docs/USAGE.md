@@ -2,14 +2,14 @@
 
 [Guide index](README.md) · [Configuration](CONFIGURATION.md) · [Troubleshooting](TROUBLESHOOTING.md)
 
-Research Copilot works inside VS Code alongside your normal LaTeX editor and compiler. It reads local project files, offers suggestions, and leaves authorship and scientific judgment to you. You can browse and search the local index without making a model request.
+Research Copilot works inside VS Code with LaTeX and plain `.txt` manuscripts. It reads local project files, offers suggestions, and leaves authorship and scientific judgment to you. You can browse and search the local index without making a model request.
 
 ## First session
 
 1. Follow [local setup](CONFIGURATION.md#development-window-or-installed-extension) to launch the example development window, or [install the VSIX](CONFIGURATION.md#install-the-vsix) and open your own research folder.
 2. Open **Research Copilot** in the activity bar. Run **Research Copilot: Check Local Setup** from the command palette to check Python, PDF support, and the artifact count.
-3. For the default subscription backend, run **Research Copilot: Sign in with ChatGPT** and finish authentication in your browser. Existing Codex authentication can also be used. See [subscription setup](CONFIGURATION.md#chatgpt-subscription-through-codex).
-4. Open `paper/results.tex` in the example. Put the cursor at the end of a sentence in the Results section.
+3. Grok is the default for every mode. Run **Research Copilot: Set Grok API Key**; the masked key is stored in VS Code SecretStorage. The provider row shows **Grok · all modes** and opens Settings if you want Codex, OpenAI, a local model, or a WRITE-only override.
+4. Open `paper/results.tex` or `paper/plain-draft.txt` in the example. Put the cursor at the end of a sentence.
 5. Select **GUIDE** and click **Suggest next step**. With the editor focused, the equivalent shortcut is **Cmd+Option+Space** on macOS or **Ctrl+Alt+Space** on Linux/Windows.
 6. The first explicit cloud request asks permission to send selected manuscript excerpts and retrieved evidence. Declining leaves the manuscript unchanged. No inference runs just because the extension activates.
 7. Read the suggestion, then open **Evidence** to check support and **Context** to inspect the selected artifacts. **Research Copilot: Inspect Last Request** opens the full prompt, context, response, and validation details.
@@ -38,6 +38,12 @@ WRITE keeps a small two-minute session cache by default. Reopening the exact cur
 Use **Research Copilot: Cancel Suggestion** or the sidebar's Cancel button to stop a pending request. Moving the cursor, editing the document, or changing modes invalidates outdated suggestions.
 
 Automatic requests are optional. Enable `researchCopilot.automaticSuggestions` only if desired: GUIDE triggers after a sentence ending, WRITE after a pause with text before the cursor, and EVIDENCE after a paragraph break. The default delay is 1,800 ms. FIGURE / TABLE and STRUCTURE stay explicit. OFF suppresses all automatic requests. A cloud backend still requires an initial explicit request and consent.
+
+The left panel is grouped by task: **Writing** contains Suggestion and Outline, **Research** contains Evidence, References, Results, and Figures, and **Workspace** contains Context and Chat. Selecting a reference still brings its exact local passage to the top of Evidence.
+
+### Plain-text manuscripts
+
+Open any `.txt` file under the research workspace and leave its VS Code language mode as **Plain Text**. GUIDE, WRITE ghost text, EVIDENCE, STRUCTURE, Chat, cursor tracking, section goals, and reviewed edits work as they do for `.tex`. Lines beginning with `#` and underlined headings such as `Results` followed by `=======` provide section context and an ephemeral outline. Plain text does not interpret LaTeX includes, labels, or figure environments. **Insert citation** adds an undoable `[citation-key]` placeholder; choose the final citation style during normal editing.
 
 ## GUIDE cards and locked references
 
@@ -106,7 +112,7 @@ If there is no saved outline, headings in the manuscript supply a temporary outl
 
 ### Remember the goal of the current section
 
-1. Put the cursor in the relevant `.tex` section.
+1. Put the cursor in the relevant `.tex` or `.txt` section.
 2. Pin any evidence you want associated with that section.
 3. Run **Research Copilot: Set Current Section Goal** or click **Set section goal** in Context.
 4. Enter a short statement such as “Explain the runtime tradeoff without claiming a causal mechanism.”
@@ -115,11 +121,11 @@ The goal and the current pin IDs are saved in `.research-copilot/state.json` and
 
 ## Follow your place in the document
 
-Requests use the active LaTeX file, cursor position, enclosing headings, current paragraph, nearby text, and relevant indexed artifacts. Unsaved manuscript text takes precedence over the saved version. This gives the assistant context about where you are writing, including when you move between included `.tex` files.
+Requests use the active `.tex` or `.txt` file, cursor position, enclosing headings, current paragraph, nearby text, and relevant indexed artifacts. Unsaved manuscript text takes precedence over the saved version. This gives the assistant context about where you are writing, including when you move between included `.tex` files or plain-text drafts.
 
-When you open a reference or use the sidebar, the extension retains the last manuscript editor. Click the intended `.tex` file and position the cursor before requesting help if you have several manuscripts open. In a multi-root workspace, the active manuscript selects the project root; evidence is not silently combined across roots.
+When you open a reference or use the sidebar, the extension retains the last manuscript editor. Click the intended `.tex` or `.txt` file and position the cursor before requesting help if you have several manuscripts open. In a multi-root workspace, the active manuscript selects the project root; evidence is not silently combined across roots.
 
-This tracks document position, not your mental writing stage. Record “planning,” “drafting,” or “revising” in your outline or section goal if useful. There is no automatic inference that a section is finished. For bibliography, outline, code, or data files, **save changes before using them as evidence**; dirty non-LaTeX sources are withheld from requests.
+This tracks document position, not your mental writing stage. Record “planning,” “drafting,” or “revising” in your outline or section goal if useful. There is no automatic inference that a section is finished. For bibliography, outline, code, or data files, **save changes before using them as evidence**; dirty non-manuscript sources are withheld from requests.
 
 ## Manage references and local PDFs
 
@@ -140,7 +146,7 @@ For example, in `references/references.bib`:
 ```
 
 4. Open **References** and search by title, author, citation key, or passage text. BibTeX metadata and PDF passages appear as separate cards.
-5. With the manuscript cursor positioned, click **Insert citation** on a bibliography card. This inserts `\cite{fixture2026}` and remains undoable. Keep using your normal bibliography package and LaTeX build; the extension does not configure them.
+5. With the manuscript cursor positioned, click **Insert citation** on a bibliography card. This inserts `\cite{fixture2026}` in LaTeX or `[fixture2026]` in plain text and remains undoable. Keep using your normal citation workflow; the extension does not configure it.
 6. Use **Open highlighted passage** on a PDF card to inspect the exact extracted text and its page region. Navigate pages and zoom locally; returning to the evidence page restores its highlight.
 7. Pin the bibliography entry and the relevant PDF passage when both should be available for a request.
 
@@ -192,7 +198,7 @@ For an edit:
 4. Choose **Apply reviewed edit**, or reject/close the review. Merely requesting an edit or opening its diff does not change the file. The command **Research Copilot: Apply Reviewed Edit** also applies a previously reviewed proposal.
 5. Use normal VS Code Undo if needed, and save when satisfied. The extension does not automatically save the edit; your own VS Code Auto Save setting still applies.
 
-Only a bounded replacement in an existing `.tex` file is supported. Changed text after review invalidates the proposal and requires regeneration/review. Raw results, code, outlines, and bibliography files cannot be changed by model edit actions. Review remains necessary: provenance checks do not certify that the prose is scientifically correct.
+Only a bounded replacement in an existing `.tex` or `.txt` manuscript is supported. Changed text after review invalidates the proposal and requires regeneration/review. Raw results, code, outlines, and bibliography files cannot be changed by model edit actions. Review remains necessary: provenance checks do not certify that the prose is scientifically correct.
 
 ## Command reference
 

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import type { EditProposal } from "./types";
+import { isManuscriptPath } from "./manuscript";
 export const hashText = (text: string) =>
   createHash("sha256").update(text).digest("hex");
 export function safeRelative(file: string): string {
@@ -17,8 +18,10 @@ export function safeRelative(file: string): string {
 }
 export function prepareEdit(proposal: EditProposal, current: string) {
   safeRelative(proposal.path);
-  if (!proposal.path.endsWith(".tex"))
-    throw new Error("Only existing LaTeX manuscript files can be edited");
+  if (!isManuscriptPath(proposal.path))
+    throw new Error(
+      "Only existing .tex or .txt manuscript files can be edited",
+    );
   if (!proposal.original || proposal.replacement.length > 12000)
     throw new Error("An edit needs a bounded, exact original span");
   const at = current.indexOf(proposal.original);

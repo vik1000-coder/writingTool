@@ -74,3 +74,10 @@ See [VALIDATION.md](VALIDATION.md) for test coverage, live versus fixture checks
 - [x] Safe hover/focus details for AI summary, writing-position relevance, and local locator.
 - [x] PDF-first citation deduplication with no weak-match padding or model-generated quotations.
 - [x] Current-token source viewing/locking and existing source freshness invalidation preserved.
+
+## v0.3.0 follow-up: all-Grok routing, plain text, and panel organization
+
+- [x] Grok default for every mode, with visible effective routing and Settings-based provider/WRITE overrides.
+- [x] Plain `.txt` manuscript activation, indexing, heading context, GUIDE/WRITE, section goals, citations, and reviewed edits.
+- [x] Writing, Research, and Workspace navigation groups in the left panel with the same complete panel set.
+- [x] Deterministic Grok contract/default tests without paid CI calls and real-host `.txt` acceptance coverage.

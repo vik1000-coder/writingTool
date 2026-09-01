@@ -2,7 +2,7 @@
 
 **Think about what to write before asking AI to write it.**
 
-A local-first VS Code extension for scientific writing in LaTeX. It combines your manuscript, optional outline, bibliography, local PDFs, results, code, and figures into small, inspectable model requests. The researcher remains the author.
+A local-first VS Code extension for scientific writing in LaTeX or plain `.txt` manuscripts. It combines your manuscript, optional outline, bibliography, local PDFs, results, code, and figures into small, inspectable model requests. The researcher remains the author.
 
 The implementation covers the specification's Stages A–C, with the deliberate boundaries recorded in the implementation ledger. It uses the existing VS Code editor and your usual LaTeX tooling. There is no hosted service, account system, vector database, or custom compiler.
 
@@ -22,7 +22,7 @@ The implementation covers the specification's Stages A–C, with the deliberate 
 
 ## Run locally
 
-Prerequisites: VS Code 1.96+, Node.js 20+, and Python 3.10+. The development dependency pins a current Codex CLI; you do not have to replace your system CLI. ChatGPT authentication is managed by Codex.
+Prerequisites: VS Code 1.96+, Node.js 20+, Python 3.10+, and an xAI API key for the default Grok provider. Codex, OpenAI API, and a loopback local model remain optional settings.
 
 ```sh
 git clone https://github.com/vik1000-coder/writingTool.git
@@ -32,11 +32,11 @@ npm run setup
 npm run dev
 ```
 
-Or open the repository in VS Code and press **F5**. This launches a separate development window containing the synthetic example study. The developer build automatically uses this repository's Python environment and Codex runtime. `npm run setup` installs only into `.venv`; it does not change system Python.
+Or open the repository in VS Code and press **F5**. This launches a separate development window containing the synthetic example study. The developer build automatically uses this repository's Python environment. `npm run setup` installs only into `.venv`; it does not change system Python.
 
 1. Open **Research Copilot** from the activity bar.
-2. Run **Research Copilot: Sign in with ChatGPT** from the command palette. Existing Codex authentication also works.
-3. Open `paper/results.tex` and place your cursor in a paragraph.
+2. Run **Research Copilot: Set Grok API Key**. The masked value is stored in VS Code SecretStorage.
+3. Open `paper/results.tex` or `paper/plain-draft.txt` and place your cursor in a paragraph.
 4. Leave **GUIDE** selected and click **Suggest next step**, or press **Cmd+Option+Space** / **Ctrl+Alt+Space**.
 5. Inspect **Evidence** and **Context** before using the suggestion.
 
@@ -53,7 +53,7 @@ No model request runs on activation. The first explicit cloud request asks wheth
 | FIGURE / TABLE | A presentation proposal using actual project data, existing figures, and plotting code. May recommend no visualization. |
 | STRUCTURE | Missing argument components, outline goals, and section-level guidance. |
 
-The internal representation separates **lens** from **intervention level**. Every suggestion mode is read-only. Chat may propose a bounded `.tex` edit only when explicitly requested; it opens a diff and requires approval. Applying an edit checks that the manuscript has not changed since review and leaves saving to you. Raw result files cannot be modified through model actions.
+The internal representation separates **lens** from **intervention level**. Every suggestion mode is read-only. Chat may propose a bounded `.tex` or `.txt` edit only when explicitly requested; it opens a diff and requires approval. Applying an edit checks that the manuscript has not changed since review and leaves saving to you. Raw result files cannot be modified through model actions.
 
 ## Evidence you can inspect
 
@@ -68,7 +68,7 @@ Markdown outlines remain valid. YAML outlines can hold goals, claims, evidence, 
 
 ## Use an existing research project
 
-Open any trusted local folder. File layout is flexible. In Git repositories, discovery includes tracked files plus untracked files that Git does not ignore; already tracked files remain discoverable even if later ignored. Without Git discovery, the fallback uses built-in exclusions rather than parsing `.gitignore`. Use explicit project exclusions for sensitive material. Symlinks are not indexed. Unsaved LaTeX text is used for manuscript context; other source files with unsaved changes are withheld until saved.
+Open any trusted local folder. File layout is flexible. In Git repositories, discovery includes tracked files plus untracked files that Git does not ignore; already tracked files remain discoverable even if later ignored. Without Git discovery, the fallback uses built-in exclusions rather than parsing `.gitignore`. Use explicit project exclusions for sensitive material. Symlinks are not indexed. Unsaved `.tex` and `.txt` prose is used for manuscript context; other source files with unsaved changes are withheld until saved.
 
 Optional `.research-copilot/project.yaml`:
 
@@ -105,7 +105,7 @@ The settings prefix is `researchCopilot`.
 
 | Setting | Purpose |
 | --- | --- |
-| `backend` | `codex` (default), `openai`, `grok`, or `local` |
+| `backend` | `grok` (default), `codex`, `openai`, or `local` |
 | `writeBackend` | `same`, or a separate WRITE provider |
 | `model` | Codex model ID; blank uses Codex's configured default. **Select Codex Model** lists availability. |
 | `grokModel` | xAI structured-output model; defaults to `grok-4.6` |
@@ -119,7 +119,7 @@ The settings prefix is `researchCopilot`.
 | `logRequests` | Opt-in local research request logs; disabled by default |
 | `cacheSuggestions` | Reuse exact validated WRITE completions in bounded session memory; enabled by default |
 
-Grok is also available: run **Research Copilot: Set Grok API Key**, paste the key into the masked input, and choose all modes or WRITE only. The key stays in VS Code SecretStorage. Research modes default to `grok-4.6`; WRITE defaults to the lower-latency `grok-4.3` profile with reasoning disabled. Validated WRITE continuations are cached briefly in session memory and can reuse a matching typed prefix without another model call. xAI API usage is billed separately. See [Grok setup](docs/CONFIGURATION.md#grok--xai-api-backend).
+Grok is the default for every mode: `backend: "grok"` with `writeBackend: "same"`. Run **Research Copilot: Set Grok API Key**; the key stays in VS Code SecretStorage. Research modes default to `grok-4.6`; WRITE defaults to the lower-latency `grok-4.3` profile with reasoning disabled. The provider row in the sidebar shows the effective routing and opens Settings directly. You can select Codex, OpenAI, a local model, or a WRITE-only override there. Validated WRITE continuations are cached briefly in session memory and can reuse a matching typed prefix without another model call. xAI API usage is billed separately. See [Grok setup](docs/CONFIGURATION.md#grok--xai-api-backend).
 
 GUIDE now places up to three grounded reference titles alongside the suggested topic. Hover or keyboard-focus a reference for its AI summary and why it fits; select or lock it to inspect the exact local source in the left panel. **WRITE** continues to use Tab-accepted ghost text. See [cards and reference locking](docs/USAGE.md#guide-cards-and-locked-references).
 
@@ -131,10 +131,10 @@ The Codex adapter was tested with CLI **0.151.0**, including live ChatGPT-authen
 
 ```sh
 npm run package
-code --install-extension research-copilot-0.2.2.vsix
+code --install-extension research-copilot-0.3.0.vsix
 ```
 
-The VSIX contains the bundled extension, webview assets, Python helper sources, and the usage/configuration/troubleshooting guides. Development tools, models, node_modules and Python wheels are **not** bundled. For an installed VSIX, set `pythonPath` in **User Settings** to your prepared Python environment (for example the absolute path to this clone's `.venv/bin/python`, or `.venv\\Scripts\\python.exe` on Windows), and ensure a current `codex` is on PATH or set `codexPath`. Use **Check Local Setup** to inspect capabilities. No VS Code Marketplace publication is required. Windows remains unverified; macOS and Linux have been exercised.
+The VSIX contains the bundled extension, webview assets, Python helper sources, and the usage/configuration/troubleshooting guides. Development tools, models, node_modules and Python wheels are **not** bundled. For an installed VSIX, set `pythonPath` in **User Settings** to your prepared Python environment (for example the absolute path to this clone's `.venv/bin/python`, or `.venv\\Scripts\\python.exe` on Windows). A Codex executable is needed only if you select the optional Codex provider. Use **Check Local Setup** to inspect capabilities. No VS Code Marketplace publication is required. Windows remains unverified; macOS and Linux have been exercised.
 
 Compilation remains your normal LaTeX workflow; [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) is optional. The built-in source viewer is for evidence PDFs, not a replacement for manuscript compilation.
 
@@ -157,12 +157,12 @@ The Grok smoke test also consumes API usage and reads a key only from the file p
 npx tsx scripts/smoke-grok.ts /absolute/path/to/key-file.rtf
 ```
 
-The normal test suite makes no cloud model requests. Python tests use `.venv` when available; without optional dependencies, PDF/YAML-specific cases explicitly skip. Run setup for the full suite. Tests cover malformed sources, provenance forgery, citation injection, cancellation, subprocess failure, unsaved changes, configuration invalidation, result indexing, PDF geometry, and read-only interaction. Native inline commit tests require an OS-focused test window; background hosts verify completion state and report the focus-dependent portion separately.
+The normal test suite makes no cloud model requests. It treats Grok as the product default and exercises the xAI request contract with mocked HTTP; the real extension-host suite uses a deterministic loopback provider so CI never spends API credits. Python tests use `.venv` when available; without optional dependencies, PDF/YAML-specific cases explicitly skip. Run setup for the full suite. Tests cover `.tex` and `.txt` manuscripts, malformed sources, provenance forgery, citation injection, cancellation, subprocess failure, unsaved changes, configuration invalidation, result indexing, PDF geometry, and read-only interaction. Native inline commit tests require an OS-focused test window; background hosts verify completion state and report the focus-dependent portion separately.
 
 See [implementation coverage](docs/IMPLEMENTATION.md), [validation notes](docs/VALIDATION.md), and [contributing](CONTRIBUTING.md). The standalone shell, Zotero, collaboration, OCR, arbitrary TeX macro expansion, Parquet, analysis execution, and automatic figure generation remain outside this MVP. Retrieval is local lexical ranking with mode priorities and explicit relationships, not a claim of perfect semantic relevance.
 
 ## Privacy
 
-This extension has no telemetry. It launches one local indexer and Codex on demand, creates no listening service, and does not scrape ChatGPT. Research files remain ordinary local files. Cloud model use transmits selected context and the prompt (including bounded Chat history when applicable) to that provider; local storage does not imply offline inference. Codex's own authentication, retention, provider, and administrative settings remain subject to its configuration. Logs are opt-in and may contain unpublished work. Secret-name exclusions cannot identify every sensitive file: configure file/folder exclusions **before** requesting help. **Inspect Last Request** is retrospective, not a preflight approval screen. See [security and privacy](SECURITY.md).
+This extension has no telemetry. It launches one local indexer and only the selected model provider on demand; it creates no listening service and does not scrape chat websites. Research files remain ordinary local files. Cloud model use transmits selected context and the prompt (including bounded Chat history when applicable) to that provider; local storage does not imply offline inference. Provider authentication, retention, and administrative settings remain applicable. Logs are opt-in and may contain unpublished work. Secret-name exclusions cannot identify every sensitive file: configure file/folder exclusions **before** requesting help. **Inspect Last Request** is retrospective, not a preflight approval screen. See [security and privacy](SECURITY.md).
 
 MIT licensed. PDFium/Pillow/PyYAML and development dependencies retain their own licenses. The sample source PDF is generated by this repository and is not a real publication.

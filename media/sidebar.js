@@ -12,18 +12,17 @@
     history: [],
     status: "Loading local project…",
   };
-  let tab = saved.tab || "Suggestion";
-  let draft = saved.draft || "";
-  const tabs = [
-    "Suggestion",
-    "Evidence",
-    "Outline",
-    "Results",
-    "References",
-    "Figures",
-    "Context",
-    "Chat",
+  const tabGroups = [
+    { label: "Writing", tabs: ["Suggestion", "Outline"] },
+    {
+      label: "Research",
+      tabs: ["Evidence", "References", "Results", "Figures"],
+    },
+    { label: "Workspace", tabs: ["Context", "Chat"] },
   ];
+  const tabs = tabGroups.flatMap((group) => group.tabs);
+  let tab = tabs.includes(saved.tab) ? saved.tab : "Suggestion";
+  let draft = saved.draft || "";
   const descriptions = {
     off: "No proactive AI. Ask an explicit question in Chat.",
     guide: "A next-sentence intention with grounded reference suggestions.",
@@ -51,6 +50,17 @@
   }
   function warning(text) {
     return node("p", text, "warning");
+  }
+  const providerName = (value) =>
+    ({ grok: "Grok", codex: "Codex", openai: "OpenAI", local: "Local" })[
+      value
+    ] || "Unknown";
+  function providerLabel(provider = {}) {
+    const main = provider.main || "grok",
+      write = provider.write || "same";
+    return write === "same" || write === main
+      ? `${providerName(main)} · all modes`
+      : `Research · ${providerName(main)} / WRITE · ${providerName(write)}`;
   }
   function guideReferenceStrip(references) {
     const strip = node("section", undefined, "guide-reference-strip");
@@ -110,7 +120,8 @@
     card.append(
       node(
         "span",
-        a.kind.toUpperCase() + (state.pins?.includes(a.id) ? " · PINNED" : ""),
+        (a.kind === "tex" ? "MANUSCRIPT" : a.kind.toUpperCase()) +
+          (state.pins?.includes(a.id) ? " · PINNED" : ""),
         "tag",
       ),
       node("h3", a.title),
@@ -590,11 +601,20 @@
     if (!["Suggestion", "Evidence", "Context", "Chat"].includes(tab))
       send("catalog", { tab });
   }
-  for (const value of tabs) {
-    const b = button(value, () => selectTab(value));
-    b.setAttribute("role", "tab");
-    b.setAttribute("aria-selected", String(value === tab));
-    document.querySelector("nav").append(b);
+  for (const group of tabGroups) {
+    const wrap = node("section", undefined, "nav-group"),
+      label = node("span", group.label, "nav-label"),
+      buttons = node("div", undefined, "nav-tabs");
+    wrap.setAttribute("role", "group");
+    wrap.setAttribute("aria-label", group.label);
+    for (const value of group.tabs) {
+      const b = button(value, () => selectTab(value));
+      b.setAttribute("role", "tab");
+      b.setAttribute("aria-selected", String(value === tab));
+      buttons.append(b);
+    }
+    wrap.append(label, buttons);
+    document.querySelector("nav").append(wrap);
   }
   $("mode").addEventListener("change", (e) =>
     send("mode", { mode: e.target.value }),
@@ -602,6 +622,7 @@
   $("suggest").addEventListener("click", () => send("suggest"));
   $("cancel").addEventListener("click", () => send("cancel"));
   $("setup").addEventListener("click", () => send("setup"));
+  $("settings").addEventListener("click", () => send("settings"));
   $("refresh").addEventListener("click", () => send("refresh"));
   window.addEventListener("message", (e) => {
     if (e.data.type !== "state") return;
@@ -620,6 +641,7 @@
       selectTab("Evidence");
     $("mode").value = state.mode;
     $("mode-help").textContent = descriptions[state.mode];
+    $("provider-label").textContent = providerLabel(state.provider);
     $("status").textContent = state.status || "";
     $("suggest").disabled = state.busy || state.mode === "off";
     $("suggest").textContent = state.busy
@@ -648,5 +670,5 @@
     }
   });
   renderPanel();
-  send("ready");
+  send("ready", { tab });
 })();

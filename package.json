@@ -1,8 +1,8 @@
 {
   "name": "research-copilot",
   "displayName": "Research Copilot",
-  "description": "Local-first LaTeX writing assistance with inspectable scientific evidence.",
-  "version": "0.2.2",
+  "description": "Local-first research writing assistance for LaTeX and plain text with inspectable evidence.",
+  "version": "0.3.0",
   "publisher": "research-copilot",
   "private": true,
   "license": "MIT",
@@ -16,7 +16,9 @@
   ],
   "keywords": [
     "latex",
+    "plain-text",
     "research",
+    "grok",
     "codex",
     "citations",
     "local-first"
@@ -29,6 +31,7 @@
   "activationEvents": [
     "onLanguage:latex",
     "onLanguage:tex",
+    "onLanguage:plaintext",
     "onView:researchCopilot.sidebar"
   ],
   "capabilities": {
@@ -136,7 +139,7 @@
         "command": "researchCopilot.suggest",
         "key": "ctrl+alt+space",
         "mac": "cmd+alt+space",
-        "when": "editorLangId == latex || editorLangId == tex"
+        "when": "editorLangId == latex || editorLangId == tex || editorLangId == plaintext"
       },
       {
         "command": "researchCopilot.cancel",
@@ -155,8 +158,8 @@
             "grok",
             "local"
           ],
-          "default": "codex",
-          "description": "Model backend. OpenAI and Grok API usage is billed separately from chat subscriptions."
+          "default": "grok",
+          "description": "Provider for GUIDE, EVIDENCE, FIGURE/TABLE, STRUCTURE, Chat, and WRITE when writeBackend is same. Grok and OpenAI API usage is billed separately."
         },
         "researchCopilot.writeBackend": {
           "type": "string",
@@ -168,7 +171,7 @@
             "local"
           ],
           "default": "same",
-          "description": "Optional separate backend for WRITE."
+          "description": "Optional WRITE-only provider override. Keep same to use the main backend for every mode."
         },
         "researchCopilot.codexPath": {
           "type": "string",

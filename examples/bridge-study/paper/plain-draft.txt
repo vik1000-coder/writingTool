@@ -1,0 +1,9 @@
+Results note
+============
+
+The synthetic comparison changes under stronger constraints.
+
+Discussion
+----------
+
+Explain the runtime and robustness tradeoff before making an efficiency claim.

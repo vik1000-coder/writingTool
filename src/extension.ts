@@ -6,7 +6,12 @@ import { CodexBackend } from "./backends/codex";
 import { HttpBackend } from "./backends/http";
 import { assembleContext, buildPrompt } from "./core/context";
 import { hashText, prepareEdit, safeRelative } from "./core/edits";
-import { cursorContext, parseLatex, resolveIncludes } from "./core/latex";
+import { cursorContext, resolveIncludes } from "./core/latex";
+import {
+  citationText,
+  isManuscriptPath,
+  parseManuscript,
+} from "./core/manuscript";
 import { refreshManuscriptArtifact } from "./core/live";
 import { resolveSuggestion, validateSuggestion } from "./core/integrity";
 import { MODES, shouldTrigger, validateMode } from "./core/modes";
@@ -30,10 +35,14 @@ import {
 } from "./core/cards";
 import { SuggestionHover } from "./ui/hover";
 import { CompletionCache } from "./core/completion-cache";
+import {
+  providerForMode,
+  type ProviderKind,
+  type WriteProvider,
+} from "./core/provider";
 
-const isTex = (document: vscode.TextDocument) =>
-  document.uri.scheme === "file" &&
-  document.fileName.toLowerCase().endsWith(".tex");
+const isManuscript = (document: vscode.TextDocument) =>
+  document.uri.scheme === "file" && isManuscriptPath(document.fileName);
 const emptyState = (): ProjectState => ({
   pins: [],
   excluded: [],
@@ -73,7 +82,7 @@ export class ResearchCopilot
   private editor?: vscode.TextEditor;
   private cursorKey = "";
   private busy = false;
-  private status = "Open a LaTeX project. Suggestions are read-only.";
+  private status = "Open a .tex or .txt project. Suggestions are read-only.";
   private report?: ScanReport;
   private projectState = emptyState();
   private relations: Relation[] = [];
@@ -150,10 +159,10 @@ export class ResearchCopilot
     this.statusbar.show();
     this.editor =
       vscode.window.activeTextEditor &&
-      isTex(vscode.window.activeTextEditor.document)
+      isManuscript(vscode.window.activeTextEditor.document)
         ? vscode.window.activeTextEditor
         : vscode.window.visibleTextEditors.find((editor) =>
-            isTex(editor.document),
+            isManuscript(editor.document),
           );
     if (this.editor) this.cursorKey = this.selectionKey(this.editor);
     this.disposables.push(
@@ -170,6 +179,7 @@ export class ResearchCopilot
         [
           { scheme: "file", language: "latex" },
           { scheme: "file", language: "tex" },
+          { scheme: "file", language: "plaintext" },
         ],
         {
           provideInlineCompletionItems: async (
@@ -178,7 +188,7 @@ export class ResearchCopilot
             context,
             token,
           ) => {
-            if (this.mode !== "write" || !isTex(document)) return [];
+            if (this.mode !== "write" || !isManuscript(document)) return [];
             if (!this.ghost && !this.busy) {
               const reused = await this.reuseWrite(document, position);
               if (
@@ -215,7 +225,7 @@ export class ResearchCopilot
     );
     this.disposables.push(
       vscode.window.onDidChangeActiveTextEditor((editor) => {
-        if (editor && isTex(editor.document)) {
+        if (editor && isManuscript(editor.document)) {
           if (
             this.editor === editor &&
             this.cursorKey === this.selectionKey(editor)
@@ -333,6 +343,7 @@ export class ResearchCopilot
     if (!m || typeof m.type !== "string") return;
     switch (m.type) {
       case "ready":
+        if (Object.hasOwn(catalogKinds, m.tab)) this.catalogTab = m.tab;
         await this.ensureIndex();
         this.publish();
         break;
@@ -350,6 +361,12 @@ export class ResearchCopilot
         break;
       case "setup":
         await this.setup();
+        break;
+      case "settings":
+        await vscode.commands.executeCommand(
+          "workbench.action.openSettings",
+          "@ext:research-copilot.research-copilot researchCopilot.backend",
+        );
         break;
       case "chat":
         if (
@@ -444,6 +461,7 @@ export class ResearchCopilot
         ephemeralOutline:
           this.catalogTab === "Outline" &&
           this.catalog.every((a) => a.metadata.ephemeral),
+        provider: this.providerState(),
       },
     });
   }
@@ -563,7 +581,7 @@ export class ResearchCopilot
                 "__pycache__",
               ].includes(p),
             ) ||
-            !/\.(tex|bib|md|pdf|py|ipynb|csv|json|ya?ml|png|svg)$/.test(
+            !/\.(tex|txt|bib|md|pdf|py|ipynb|csv|json|ya?ml|png|svg)$/.test(
               relative,
             ))
         )
@@ -647,10 +665,17 @@ export class ResearchCopilot
     this.status = MODES[mode].description;
     this.publish();
   }
-  private backendKind(mode: ContextPacket["mode"]) {
-    const main = this.setting("backend", "codex");
-    const write = this.setting("writeBackend", "same");
-    return mode === "write" && write !== "same" ? write : main;
+  private backendKind(mode: ContextPacket["mode"] | "off") {
+    return providerForMode(
+      mode,
+      this.setting<ProviderKind>("backend", "grok"),
+      this.setting<WriteProvider>("writeBackend", "same"),
+    );
+  }
+  private providerState() {
+    const main = this.setting<ProviderKind>("backend", "grok"),
+      write = this.setting<WriteProvider>("writeBackend", "same");
+    return { main, write, active: this.backendKind(this.mode) };
   }
   private getCodex() {
     if (!this.root) throw new Error("No project open");
@@ -709,7 +734,7 @@ export class ResearchCopilot
       .split(path.sep)
       .join("/");
     const offset = editor.document.offsetAt(editor.selection.active);
-    const cursor = cursorContext(text, offset, parseLatex(file, text));
+    const cursor = cursorContext(text, offset, parseManuscript(file, text));
     const query = `${cursor.headings.map((h) => h.title).join(" ")} ${cursor.paragraph.slice(-1200)} ${question ?? ""}`;
     const kinds: ArtifactKind[] =
       mode === "structure"
@@ -733,7 +758,7 @@ export class ResearchCopilot
         ...(memory?.evidence ?? []),
       ])),
     );
-    const citations = parseLatex(file, cursor.paragraph).citations.map(
+    const citations = parseManuscript(file, cursor.paragraph).citations.map(
       (c) => `bib:${c.key}`,
     );
     artifacts.push(...(await index.resolve(citations)));
@@ -759,17 +784,21 @@ export class ResearchCopilot
       );
     }
     texFiles.set(file, text);
-    const rootFile =
-      this.report?.config.paper?.root ??
-      [...texFiles].find(([, source]) =>
-        /\\documentclass(?:\[[^\]]*\])?\{/.test(source),
-      )?.[0] ??
-      file;
-    const structure = resolveIncludes(rootFile, texFiles);
+    const plainText = path.extname(file).toLowerCase() === ".txt";
+    const rootFile = plainText
+      ? file
+      : (this.report?.config.paper?.root ??
+        [...texFiles].find(([, source]) =>
+          /\\documentclass(?:\[[^\]]*\])?\{/.test(source),
+        )?.[0] ??
+        file);
+    const structure = plainText
+      ? { paths: [file], warnings: [] }
+      : resolveIncludes(rootFile, texFiles);
     // Replace on-disk manuscript objects with unsaved buffer content at request time.
     const dirtySources = new Set(
       vscode.workspace.textDocuments
-        .filter((d) => d.isDirty && d.uri.scheme === "file" && !isTex(d))
+        .filter((d) => d.isDirty && d.uri.scheme === "file" && !isManuscript(d))
         .map((d) =>
           path.relative(root, d.uri.fsPath).split(path.sep).join("/"),
         ),
@@ -861,9 +890,9 @@ export class ResearchCopilot
     await this.ensureIndex();
     if (this.busy) return;
     const editor = this.editor;
-    if (!editor || !isTex(editor.document) || editor.document.isClosed)
+    if (!editor || !isManuscript(editor.document) || editor.document.isClosed)
       throw new Error(
-        "Open a .tex manuscript and place the cursor where you want help.",
+        "Open a .tex or .txt manuscript and place the cursor where you want help.",
       );
     if (
       editor.document.uri.scheme !== "file" ||
@@ -1022,7 +1051,7 @@ export class ResearchCopilot
           const current = cursorContext(
             editor.document.getText(),
             offset,
-            parseLatex(packet.current.path, editor.document.getText()),
+            parseManuscript(packet.current.path, editor.document.getText()),
           );
           this.diagnostics.set(
             editor.document.uri,
@@ -1315,10 +1344,14 @@ export class ResearchCopilot
       !/^[^\s{}\\,]+$/.test(a.metadata.key)
     )
       throw new Error("Citation requires a current bibliography entry");
-    if (!editor || editor.document.isClosed || !isTex(editor.document))
+    if (!editor || editor.document.isClosed || !isManuscript(editor.document))
       throw new Error("Open a manuscript to insert this citation");
+    const key = a.metadata.key;
     await editor.edit((edit) =>
-      edit.insert(editor.selection.active, `\\cite{${a.metadata.key}}`),
+      edit.insert(
+        editor.selection.active,
+        citationText(editor.document.fileName, key),
+      ),
     );
   }
   private async updateControl(action: "pin" | "exclude", id: string) {
@@ -1392,7 +1425,7 @@ export class ResearchCopilot
     const current = cursorContext(
       this.editor.document.getText(),
       this.editor.document.offsetAt(this.editor.selection.active),
-      parseLatex(file, this.editor.document.getText()),
+      parseManuscript(file, this.editor.document.getText()),
     );
     const id = current.headings.at(-1)?.id ?? `tex:${file}`;
     const summary = await vscode.window.showInputBox({
@@ -1498,16 +1531,16 @@ export class ResearchCopilot
       problem = `Local helper unavailable: ${error instanceof Error ? error.message : String(error)}. Set pythonPath to Python 3.10+ and install requirements.txt. `;
     }
     const choice = await vscode.window.showInformationMessage(
-      `${problem}Python: ${this.python()} · PDF support: ${this.report?.capabilities.pdf ? "ready" : "missing"} · ${this.report?.count ?? 0} indexed artifacts. Suggestions default to explicit triggers.`,
-      "Sign in with ChatGPT",
+      `${problem}Provider: ${this.backendKind(this.mode)} · Python: ${this.python()} · PDF support: ${this.report?.capabilities.pdf ? "ready" : "missing"} · ${this.report?.count ?? 0} indexed artifacts. Suggestions default to explicit triggers.`,
       "Set Grok API key",
-      "Choose model",
       "Settings",
+      "Sign in with ChatGPT",
+      "Choose Codex model",
       "Configure project",
     );
     if (choice === "Sign in with ChatGPT") await this.signIn();
     if (choice === "Set Grok API key") await this.apiKey("grok");
-    if (choice === "Choose model") await this.selectModel();
+    if (choice === "Choose Codex model") await this.selectModel();
     if (choice === "Settings")
       await vscode.commands.executeCommand(
         "workbench.action.openSettings",
@@ -1581,8 +1614,9 @@ export class ResearchCopilot
       end: edit.end,
       replacement: proposal.replacement,
     };
+    const extension = path.extname(proposal.path).toLowerCase();
     const proposedUri = vscode.Uri.parse(
-      `research-copilot-preview:/proposed-${Date.now()}.tex`,
+      `research-copilot-preview:/proposed-${Date.now()}${extension}`,
     );
     this.snapshots.set(proposedUri.toString(), edit.updated);
     await vscode.commands.executeCommand(
@@ -1656,6 +1690,7 @@ export class ResearchCopilot
       timing: this.timing,
       cachedCompletions: this.writeCache.size,
       lastInlineRequest: this.lastInlineRequest,
+      provider: this.providerState(),
     };
   }
   dispose() {

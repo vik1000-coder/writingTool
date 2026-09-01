@@ -1,5 +1,5 @@
 import { hashText } from "./edits";
-import { parseLatex } from "./latex";
+import { parseManuscript } from "./manuscript";
 import type { Artifact } from "./types";
 
 /** Indexed offsets cannot be reused after an unsaved edit shifts the source. */
@@ -11,7 +11,7 @@ export function refreshManuscriptArtifact(
   if (artifact.hash === hash) return artifact;
   // Captions, figure links, and derived outline nodes must be reindexed on save.
   if (artifact.kind !== "tex") return undefined;
-  const headings = parseLatex(artifact.path, text).headings;
+  const headings = parseManuscript(artifact.path, text).headings;
   let start = 0,
     end = text.length;
   if (artifact.id.includes("#")) {

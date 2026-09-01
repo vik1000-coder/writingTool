@@ -168,13 +168,19 @@ class IndexTests(unittest.TestCase):
         self.assertFalse(any('secret' in a['text'] for a in self.index.search('', None, 100)))
         self.assertRaises(ValueError, parse_bibtex, '@misc{evil%key,title={unsafe}}')
 
-    def test_read_tex_span_is_bounded_and_does_not_read_other_file_types(self):
+    def test_plain_text_manuscripts_are_indexed_and_bounded_spans_support_both_formats(self):
         self.write('paper/main.tex', '\\section{Results}\nExact manuscript text.')
-        self.write('secret.txt', 'secret')
+        self.write('paper/draft.txt', '# Results\nPlain manuscript text.\n\n# Discussion\nA limitation.')
+        self.write('secret.md', 'secret')
         self.index.scan()
         result = self.index.dispatch('read_tex_span', {'path': 'paper/main.tex', 'start': 18, 'end': 23})
         self.assertEqual(result['text'], 'Exact')
-        self.assertRaises(ValueError, self.index.dispatch, 'read_tex_span', {'path': 'secret.txt', 'start': 0, 'end': 6})
+        plain = self.index.get('tex:paper/draft.txt')
+        self.assertEqual(plain['metadata']['format'], 'plaintext')
+        self.assertEqual([a['title'] for a in self.index.search('', ['outline']) if a['path'].endswith('.txt')], ['Discussion', 'Results'])
+        span = self.index.dispatch('read_tex_span', {'path': 'paper/draft.txt', 'start': 10, 'end': 15})
+        self.assertEqual(span['text'], 'Plain')
+        self.assertRaises(ValueError, self.index.dispatch, 'read_tex_span', {'path': 'secret.md', 'start': 0, 'end': 6})
 
     def test_figure_registry_records_caption_label_first_reference_and_lineage(self):
         self.write('paper/main.tex', '\\section{Results}\nSee \\ref{fig:comparison}.\n\\begin{figure}\n\\includegraphics{../figures/comparison.svg}\n\\caption{Comparison of ESS}\n\\label{fig:comparison}\n\\end{figure}')

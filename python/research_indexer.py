@@ -15,7 +15,7 @@ from collections import OrderedDict
 from parsers import parse_bibtex, code_nodes, data_rows, tex_commands
 import pdf_engine
 
-SUFFIXES = {'.tex', '.bib', '.md', '.pdf', '.py', '.ipynb', '.csv', '.json', '.yaml', '.yml', '.png', '.svg'}
+SUFFIXES = {'.tex', '.txt', '.bib', '.md', '.pdf', '.py', '.ipynb', '.csv', '.json', '.yaml', '.yml', '.png', '.svg'}
 SKIP_DIRS = {'.git', '.research-copilot', '.venv', 'venv', 'node_modules', '__pycache__', '.vscode', '.idea', 'dist', 'build', '.next', '.pytest_cache'}
 MAX_BYTES = 20 * 1024 * 1024
 EMPTY_STATE = {'pins': [], 'excluded': [], 'relations': [], 'sections': {}}
@@ -213,6 +213,27 @@ class Index:
                 label = next((a for c, a, _, _ in sub if c == 'label'), '')
                 kind = 'table' if env[1].startswith('table') else 'figure'
                 yield artifact(kind, f'#{label or "float-" + str(env.start())}', caption or label or kind.title(), env[0], {'start': env.start(), 'end': env.end()}, {'caption': caption, 'label': label, 'graphics': [a for c, a, _, _ in sub if c == 'includegraphics'], 'status': 'in-manuscript'})
+        elif suffix == '.txt':
+            headings = []
+            for match in re.finditer(r'(?m)^(#{1,6})[ \t]+(.+?)[ \t]*$', source):
+                headings.append((len(match[1]), match[2].strip(), match.start(), match.end()))
+            for match in re.finditer(r'(?m)^([^#\n][^\n]*)\n(=+|-+)[ \t]*$', source):
+                if not any(start == match.start() for _, _, start, _ in headings):
+                    headings.append((1 if match[2][0] == '=' else 2, match[1].strip(), match.start(), match.end()))
+            headings = sorted(
+                ((level, title, start, end) for level, title, start, end in headings if title),
+                key=lambda heading: heading[2],
+            )
+            yield artifact('tex', title=Path(name).name, text=source[:6000], metadata={'format': 'plaintext', 'includes': [], 'citations': [], 'references': [], 'headings': [heading[1] for heading in headings]})
+            seen = {}
+            for index, (level, title, start, end) in enumerate(headings):
+                slug = re.sub(r'[^\w]+', '-', title.lower()).strip('-') or 'section'
+                seen[slug] = seen.get(slug, 0) + 1
+                anchor = slug + (f'-{seen[slug]}' if seen[slug] > 1 else '')
+                section_end = headings[index + 1][2] if index + 1 < len(headings) else len(source)
+                locator = {'start': start, 'end': section_end, 'line': source[:start].count('\n') + 1}
+                yield artifact('tex', f'#{anchor}', title, source[start:section_end][:6000], locator, {'format': 'plaintext', 'level': level})
+                yield artifact('outline', f'#{anchor}', title, title, {'start': start, 'end': end}, {'ephemeral': True, 'format': 'plaintext', 'level': level})
         elif suffix in ('.md', '.yaml', '.yml'):
             configured = self.config.get('outline', {}).get('path')
             is_outline = name == configured or (not configured and 'outline' in Path(name).stem.lower())
@@ -506,8 +527,8 @@ class Index:
     def read_tex_span(self, name, start, end):
         name = self.relative(name)
         a = self.get(f'tex:{name}')
-        if not a or not isinstance(start, int) or not isinstance(end, int) or not 0 <= start <= end or end - start > 8000:
-            raise ValueError('Select a bounded span from an indexed LaTeX manuscript')
+        if Path(name).suffix.lower() not in ('.tex', '.txt') or not a or not isinstance(start, int) or not isinstance(end, int) or not 0 <= start <= end or end - start > 8000:
+            raise ValueError('Select a bounded span from an indexed .tex or .txt manuscript')
         source = self.safe_path(name).read_text('utf-8-sig')
         if end > len(source):
             raise ValueError('Span exceeds manuscript length')

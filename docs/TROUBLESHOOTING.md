@@ -57,7 +57,8 @@ Without the environment variable, this script uses the `codex` on PATH, which ma
 
 ## No suggestion appears, or Tab does nothing
 
-- Open a `.tex` file inside the project and place the cursor where you want help. Check its VS Code language mode is LaTeX/TeX.
+- Open a `.tex` or `.txt` file inside the project and place the cursor where you want help. Check its VS Code language mode is LaTeX/TeX or Plain Text.
+- Check the provider row below the mode selector. Grok is the default for all modes; use its **Settings** link if you intended to select Codex, OpenAI, a local model, or a separate WRITE provider.
 - OFF suppresses suggestions. GUIDE produces a sidebar card; only WRITE produces insertable ghost text.
 - Automatic suggestions are off by default. Request explicitly with **Research Copilot: Suggest / Regenerate**. Automatic GUIDE needs a sentence ending; EVIDENCE needs a paragraph boundary. FIGURE / TABLE and STRUCTURE are explicit-only.
 - A cloud backend needs consent on an explicit request before automatic requests run. Declining leaves the manuscript unchanged.
@@ -69,7 +70,7 @@ Native inline acceptance in automated UI tests requires window focus. A macOS ba
 
 ## References, results, code, or outline entries are missing
 
-1. Save the source files, then refresh the index. Unsaved non-LaTeX sources are omitted from requests to avoid using obsolete evidence.
+1. Save the source files, then refresh the index. Unsaved non-manuscript sources are omitted from requests to avoid using obsolete evidence; current `.tex` and `.txt` manuscript buffers are used directly.
 2. Check that files are under the active manuscript's workspace root, have a [supported format](CONFIGURATION.md#supported-files-and-limits), and do not depend on symlinks or external paths.
 3. Check `project.yaml` lists and exclusions. Configured resource lists scope their file types; `paper.root` does not import external folders. YAML lists require `-` entries, not a single string.
 4. In a Git repository, check whether untracked files are ignored. Files already tracked remain discoverable despite later `.gitignore` entries. Use explicit project exclusions for privacy.
@@ -94,11 +95,11 @@ Pinning outline metadata containing an evidence path does not fetch that file au
 
 Check the file hash, exact value, row, and column in the evidence. CSV row numbers exclude the header and count records, including multiline records. A dataset summary is not a substitute for the exact result cell. Save changed data, refresh, pin the needed rows, and regenerate. Do not bypass the warning by treating a model-generated number as verified analysis.
 
-For “Manuscript changed after review,” request a new proposal and review the new diff. The extension refuses to apply a diff against changed text. Only existing `.tex` manuscript edits are supported; requests to modify raw data, code, or an outline must be handled in the normal editor.
+For “Manuscript changed after review,” request a new proposal and review the new diff. The extension refuses to apply a diff against changed text. Only existing `.tex` or `.txt` manuscript edits are supported; requests to modify raw data, code, or an outline must be handled in the normal editor.
 
 ## The local/API adapter returns an error
 
-- Set the correct model field: `localModel` for the local server, `openaiModel` for the API, `model` for Codex.
+- Set the correct model field: `grokModel` / `grokWriteModel` for the default Grok route, `localModel` for the local server, `openaiModel` for OpenAI, or `model` for Codex.
 - An OpenAI API request needs its own API key and billing access; ChatGPT sign-in does not authorize this adapter.
 - Start a local server yourself and use a loopback `/v1` base URL. Non-loopback hosts and redirects are intentionally rejected.
 - Verify support for strict JSON-schema output, not just ordinary text chat. “No structured text,” refusal, or schema errors can mean the model/server cannot satisfy this contract.

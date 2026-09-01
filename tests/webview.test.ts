@@ -3,7 +3,58 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 const html =
-  '<body><nav></nav><select id="mode"><option value="guide">GUIDE</option><option value="off">OFF</option></select><div id="mode-help"></div><div id="status"></div><button id="suggest"></button><button id="cancel"></button><button id="setup"></button><button id="refresh"></button><div id="project-label"></div><main id="panel"></main></body>';
+  '<body><nav></nav><select id="mode"><option value="guide">GUIDE</option><option value="off">OFF</option></select><div id="mode-help"></div><div id="status"></div><span id="provider-label"></span><button id="settings"></button><button id="suggest"></button><button id="cancel"></button><button id="setup"></button><button id="refresh"></button><div id="project-label"></div><main id="panel"></main></body>';
+test("sidebar groups writing, research, and workspace panels and exposes provider settings", () => {
+  const dom = new JSDOM(html, { runScripts: "outside-only" });
+  const messages: any[] = [];
+  (dom.window as any).acquireVsCodeApi = () => ({
+    getState: () => ({}),
+    setState: () => {},
+    postMessage: (message: unknown) => messages.push(message),
+  });
+  dom.window.eval(readFileSync("media/sidebar.js", "utf8"));
+  const groups = [...dom.window.document.querySelectorAll(".nav-group")];
+  assert.deepEqual(
+    groups.map((group) => group.querySelector(".nav-label")?.textContent),
+    ["Writing", "Research", "Workspace"],
+  );
+  dom.window.dispatchEvent(
+    new dom.window.MessageEvent("message", {
+      data: {
+        type: "state",
+        state: {
+          mode: "guide",
+          provider: { main: "grok", write: "same", active: "grok" },
+        },
+      },
+    }),
+  );
+  assert.equal(
+    dom.window.document.getElementById("provider-label")!.textContent,
+    "Grok · all modes",
+  );
+  messages.length = 0;
+  (dom.window.document.getElementById("settings") as HTMLButtonElement).click();
+  assert.deepEqual(JSON.parse(JSON.stringify(messages)), [
+    { type: "settings" },
+  ]);
+  dom.window.close();
+});
+test("sidebar restores a saved catalog tab when the webview becomes ready", () => {
+  const dom = new JSDOM(html, { runScripts: "outside-only" });
+  const messages: unknown[] = [];
+  (dom.window as any).acquireVsCodeApi = () => ({
+    getState: () => ({ tab: "References" }),
+    setState: () => {},
+    postMessage: (message: unknown) => messages.push(message),
+  });
+  dom.window.eval(readFileSync("media/sidebar.js", "utf8"));
+  assert.deepEqual(JSON.parse(JSON.stringify(messages.at(-1))), {
+    type: "ready",
+    tab: "References",
+  });
+  dom.window.close();
+});
 test("sidebar renders model/source HTML as literal text and only sends narrow action messages", () => {
   const dom = new JSDOM(html, { runScripts: "outside-only" });
   const messages: unknown[] = [];

@@ -136,26 +136,59 @@ small {
   gap: 8px;
   align-items: center;
 }
-nav {
-  padding: 0 12px 8px;
+.provider-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 2px 8px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin: -2px 0 12px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--vscode-editorWidget-background, transparent);
+}
+.provider-label {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+nav {
+  padding: 4px 12px 9px;
+  display: grid;
+  gap: 5px;
   border-bottom: 1px solid var(--line);
 }
-nav button {
-  padding: 7px 5px;
+.nav-group {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px;
+}
+.nav-label {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.nav-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 7px;
+}
+.nav-tabs button {
+  padding: 5px 3px;
   font-size: 12px;
   background: transparent;
   border-radius: 0;
   color: var(--muted);
   border-bottom: 2px solid transparent;
 }
-nav button[aria-selected="true"] {
+.nav-tabs button[aria-selected="true"] {
   color: var(--vscode-foreground);
   border-color: var(--accent);
 }
-nav button:hover {
+.nav-tabs button:hover {
   background: var(--vscode-toolbar-hoverBackground);
 }
 main {

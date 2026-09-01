@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   validateSuggestion,
   resolveSuggestion,
@@ -8,6 +9,8 @@ import {
 } from "../src/core/integrity";
 import { assembleContext, buildPrompt } from "../src/core/context";
 import { prepareEdit } from "../src/core/edits";
+import { providerForMode } from "../src/core/provider";
+import { citationText } from "../src/core/manuscript";
 import type { Artifact, Suggestion } from "../src/core/types";
 export const response = (extra: Partial<Suggestion> = {}): Suggestion => ({
   mode: "guide",
@@ -32,6 +35,29 @@ const artifact = (extra: Partial<Artifact>): Artifact => ({
   locator: { rows: [1, 2], columns: ["ess"] },
   metadata: { rows: [{ ess: 42 }, { ess: 7 }] },
   ...extra,
+});
+test("Grok is the adjustable default provider for every assistance mode", () => {
+  const manifest = JSON.parse(readFileSync("package.json", "utf8"));
+  const settings = manifest.contributes.configuration.properties;
+  assert.equal(settings["researchCopilot.backend"].default, "grok");
+  assert.equal(settings["researchCopilot.writeBackend"].default, "same");
+  assert.ok(settings["researchCopilot.backend"].enum.includes("codex"));
+  assert.ok(settings["researchCopilot.backend"].enum.includes("local"));
+  assert.ok(manifest.activationEvents.includes("onLanguage:plaintext"));
+  assert.match(manifest.contributes.keybindings[0].when, /plaintext/);
+  for (const mode of [
+    "guide",
+    "write",
+    "evidence",
+    "visual",
+    "structure",
+    "chat",
+  ] as const)
+    assert.equal(providerForMode(mode), "grok");
+  assert.equal(providerForMode("guide", "codex", "grok"), "codex");
+  assert.equal(providerForMode("write", "codex", "grok"), "grok");
+  assert.equal(citationText("paper.tex", "fixture2026"), "\\cite{fixture2026}");
+  assert.equal(citationText("draft.txt", "fixture2026"), "[fixture2026]");
 });
 test("compact WRITE output keeps evidence/citation/numeric gates with no research-card overhead", () => {
   assert.deepEqual(Object.keys(schemaForMode("write").properties), [
@@ -276,6 +302,13 @@ test("edit preview refuses ambiguous replacement, stale source, non-manuscript f
   assert.equal(
     prepareEdit(
       { path: "paper/results.tex", original: "old", replacement: "new" },
+      "old sentence.",
+    ).updated,
+    "new sentence.",
+  );
+  assert.equal(
+    prepareEdit(
+      { path: "paper/draft.txt", original: "old", replacement: "new" },
       "old sentence.",
     ).updated,
     "new sentence.",

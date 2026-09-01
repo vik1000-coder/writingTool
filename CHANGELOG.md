@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 — 2026-08-31
+
+- Make Grok the default provider for GUIDE, WRITE, EVIDENCE, FIGURE/TABLE, STRUCTURE, and Chat; keep Codex, OpenAI, local, and WRITE-only overrides adjustable in Settings.
+- Show the effective provider routing beside the mode selector with a direct Settings action.
+- Reorganize the left panel into Writing, Research, and Workspace groups without removing evidence, outline, result, reference, figure, context, or Chat access.
+- Add `.txt` manuscripts with plain-text heading context, automatic/index refresh, native GUIDE and WRITE behavior, citation placeholders, section goals, and reviewed edits.
+- Add test-first coverage for provider defaults/routing, grouped keyboard-accessible navigation, plain-text indexing/live buffers, and real extension-host GUIDE/WRITE behavior.
+
 ## 0.2.2 — 2026-08-31
 
 - Put up to three grounded reference suggestions alongside each GUIDE topic in the native editor card and sidebar.

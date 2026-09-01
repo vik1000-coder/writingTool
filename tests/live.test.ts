@@ -31,3 +31,22 @@ test("unsaved manuscript sections use fresh offsets and renamed/derived stale ar
     undefined,
   );
 });
+
+test("unsaved plain-text manuscript sections retain current headings and offsets", () => {
+  const saved = "# Results\nOld.\n\n# Discussion\nTarget.";
+  const artifact: Artifact = {
+    id: "tex:paper/draft.txt#discussion",
+    kind: "tex",
+    path: "paper/draft.txt",
+    title: "Discussion",
+    text: "# Discussion\nTarget.",
+    hash: hashText(saved),
+    locator: { start: saved.indexOf("# Discussion"), end: saved.length },
+    metadata: { format: "plaintext" },
+  };
+  const live = saved.replace("Old.", "A longer unsaved opening paragraph.");
+  const refreshed = refreshManuscriptArtifact(artifact, live)!;
+  assert.equal(refreshed.text, "# Discussion\nTarget.");
+  assert.equal(refreshed.locator.start, live.indexOf("# Discussion"));
+  assert.equal(refreshed.hash, hashText(live));
+});
