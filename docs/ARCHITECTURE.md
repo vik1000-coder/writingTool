@@ -9,16 +9,16 @@ This is a VS Code extension, not a standalone editor or hosted service. The runt
 1. The controller captures the active manuscript, cursor, mode, and optional explicit question. Model calls are explicit unless automatic suggestions are enabled. Cloud calls require consent.
 2. The local indexer retrieves bounded artifacts by lexical relevance, resource kind, pins, and current confirmed relationships.
 3. The core assembles a context packet. Unsaved manuscript text replaces saved excerpts; dirty non-manuscript sources are withheld. Exclusions and the character budget apply before inference.
-4. The selected backend returns a schema-constrained suggestion. Grok is the default, with provider routing adjustable in Settings. The model receives preassembled context; it cannot invoke the indexer's retrieval operations itself in v0.3.
+4. The selected backend returns a schema-constrained suggestion. Grok is the default, with provider routing adjustable in Settings. The model receives preassembled context; it cannot invoke the indexer's retrieval operations itself in v0.3. A complete leading JSON object can be recovered from trailing provider commentary, then passes through the same strict local validators.
 5. Locally resolved current artifacts validate evidence IDs, citation keys, numerical locators, hashes, and insertion constraints. Cancellation and document versions prevent stale results from becoming current suggestions.
-6. GUIDE uses a native hover/decoration; the sidebar displays locally resolved source cards and session-only locked quotations. WRITE can expose a native inline completion. Chat can propose a bounded manuscript diff, which needs separate review and explicit application against unchanged text.
+6. GUIDE uses a native hover/decoration; the sidebar displays locally resolved source cards and session-only locked quotations. WRITE can expose a native inline completion. Chat can propose a bounded manuscript diff, which needs separate review and explicit application against unchanged text. Provider usage events feed a session-only token/cost summary; xAI-reported cost takes priority over the static documented-rate fallback.
 
 ## Code map
 
 | Area | Responsibility |
 | --- | --- |
 | `src/extension.ts` | VS Code lifecycle, workspace selection, editor events, commands, sidebar state, consent, request orchestration, diff approval. |
-| `src/core/types.ts` | Shared artifact, context, suggestion, provenance, and backend interfaces. |
+| `src/core/types.ts`, `usage.ts` | Shared artifact/context/backend interfaces plus token and price accounting. |
 | `src/core/modes.ts` | Lens/intervention presets and trigger policy. |
 | `src/core/latex.ts`, `manuscript.ts`, `live.ts` | LaTeX/plain-text structure, includes, cursor context, citations, and safe refresh of unsaved manuscript artifacts. |
 | `src/core/context.ts` | Context ranking/budget and model prompt construction. |

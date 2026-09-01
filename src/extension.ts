@@ -40,6 +40,12 @@ import {
   type ProviderKind,
   type WriteProvider,
 } from "./core/provider";
+import {
+  addSessionUsage,
+  emptyUsageSession,
+  summarizeUsage,
+  type UsageSummary,
+} from "./core/usage";
 
 const isManuscript = (document: vscode.TextDocument) =>
   document.uri.scheme === "file" && isManuscriptPath(document.fileName);
@@ -109,6 +115,8 @@ export class ResearchCopilot
     inputTokens?: number;
     outputTokens?: number;
   };
+  private usageLast?: UsageSummary;
+  private usageSession = emptyUsageSession();
   private contextPacket?: ContextPacket;
   private lastRequest?: {
     prompt: string;
@@ -117,6 +125,7 @@ export class ResearchCopilot
     resolved?: ResolvedSuggestion;
     timestamp: string;
     backend: string;
+    usage?: UsageSummary;
     cache?: { hit: true; consumed: number; ageMs: number };
     applied?: unknown;
   };
@@ -462,6 +471,7 @@ export class ResearchCopilot
           this.catalogTab === "Outline" &&
           this.catalog.every((a) => a.metadata.ephemeral),
         provider: this.providerState(),
+        usage: { last: this.usageLast, session: this.usageSession },
       },
     });
   }
@@ -677,6 +687,12 @@ export class ResearchCopilot
       write = this.setting<WriteProvider>("writeBackend", "same");
     return { main, write, active: this.backendKind(this.mode) };
   }
+  private modelFor(kind: ProviderKind, mode: ContextPacket["mode"]) {
+    if (kind === "codex") return this.setting("model", "");
+    return kind === "grok" && mode === "write"
+      ? this.setting("grokWriteModel", "grok-4.3")
+      : this.setting(`${kind}Model`, kind === "grok" ? "grok-4.6" : "");
+  }
   private getCodex() {
     if (!this.root) throw new Error("No project open");
     const configured = this.setting("codexPath", "codex");
@@ -706,10 +722,7 @@ export class ResearchCopilot
     if (kind === "codex") return this.getCodex();
     if (kind !== "local" && kind !== "openai" && kind !== "grok")
       throw new Error("Unknown backend in settings");
-    const model =
-      kind === "grok" && mode === "write"
-        ? this.setting("grokWriteModel", "grok-4.3")
-        : this.setting(`${kind}Model`, kind === "grok" ? "grok-4.6" : "");
+    const model = this.modelFor(kind, mode);
     return new HttpBackend({
       kind,
       model,
@@ -989,6 +1002,18 @@ export class ResearchCopilot
           this.status = event.text;
           this.publish();
           continue;
+        }
+        if (event.usage) {
+          this.usageLast = summarizeUsage(
+            backendKind,
+            this.modelFor(backendKind, mode),
+            event.usage,
+          );
+          this.usageSession = addSessionUsage(
+            this.usageSession,
+            this.usageLast,
+          );
+          this.lastRequest.usage = this.usageLast;
         }
         this.lastRequest.response = event.value;
         const suggestion = validateSuggestion(event.value, mode);
@@ -1691,6 +1716,7 @@ export class ResearchCopilot
       cachedCompletions: this.writeCache.size,
       lastInlineRequest: this.lastInlineRequest,
       provider: this.providerState(),
+      usage: { last: this.usageLast, session: this.usageSession },
     };
   }
   dispose() {

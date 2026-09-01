@@ -138,6 +138,11 @@ export async function run() {
     response.end(
       JSON.stringify({
         choices: [{ message: { content: JSON.stringify(suggestion) } }],
+        usage: {
+          prompt_tokens: 120,
+          prompt_tokens_details: { cached_tokens: 25 },
+          completion_tokens: 30,
+        },
       }),
     );
   });
@@ -196,6 +201,9 @@ export async function run() {
         `${mode} must leave manuscript untouched`,
       );
     }
+    assert.equal(api.getState().usage.last.totalTokens, 150);
+    assert.equal(api.getState().usage.last.costKind, "unavailable");
+    assert.equal(api.getState().usage.session.requests, 4);
     console.log(
       "PASS GUIDE, EVIDENCE, FIGURE/TABLE, STRUCTURE and read-only manuscript",
     );

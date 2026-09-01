@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 — 2026-09-01
+
+- Recover the first complete schema-constrained JSON object when Grok appends non-JSON commentary, while retaining the existing output, citation, evidence, and numerical integrity checks.
+- Replace opaque `fetch failed` messages with provider-specific DNS, timeout, connection, TLS, or general network guidance without exposing response bodies or credentials.
+- Add an always-visible sidebar footer with last-request and session token counts, cached tokens, and xAI-reported exact cost or a documented-rate estimate.
+- Add test-first HTTP, pricing, webview, and real extension-host coverage plus a paid synthetic Grok smoke check.
+
 ## 0.3.0 — 2026-08-31
 
 - Make Grok the default provider for GUIDE, WRITE, EVIDENCE, FIGURE/TABLE, STRUCTURE, and Chat; keep Codex, OpenAI, local, and WRITE-only overrides adjustable in Settings.

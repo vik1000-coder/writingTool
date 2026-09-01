@@ -19,6 +19,58 @@ export function localEndpoint(endpoint: string): string {
     );
   return url.href.replace(/\/$/, "");
 }
+function parseStructuredText(text: string): unknown {
+  const cleaned = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch (original) {
+    if (!cleaned.startsWith("{")) throw original;
+    let depth = 0,
+      quoted = false,
+      escaped = false;
+    for (let index = 0; index < cleaned.length; index++) {
+      const character = cleaned[index];
+      if (quoted) {
+        if (escaped) escaped = false;
+        else if (character === "\\") escaped = true;
+        else if (character === '"') quoted = false;
+        continue;
+      }
+      if (character === '"') quoted = true;
+      else if (character === "{") depth++;
+      else if (character === "}" && --depth === 0)
+        return JSON.parse(cleaned.slice(0, index + 1));
+    }
+    throw original;
+  }
+}
+function connectionError(label: string, error: unknown, aborted: boolean) {
+  if (aborted || (error instanceof Error && error.name === "AbortError"))
+    return new Error(`${label} request was aborted.`);
+  if (error instanceof Error && error.name === "TimeoutError")
+    return new Error(
+      `${label} request timed out after 120 seconds. Check your network, VPN, proxy, firewall, or provider status and try again.`,
+    );
+  const cause =
+      error instanceof Error && "cause" in error
+        ? (error.cause as { code?: unknown } | undefined)
+        : undefined,
+    code = typeof cause?.code === "string" ? cause.code : "";
+  const hint = /ENOTFOUND|EAI_AGAIN/.test(code)
+    ? " DNS lookup failed; check your connection, VPN, proxy, or firewall."
+    : /ECONNREFUSED/.test(code)
+      ? " The connection was refused; check that the selected service is reachable."
+      : /TIMEOUT|ETIMEDOUT/.test(code)
+        ? " The connection timed out; check your network, VPN, proxy, or firewall."
+        : /CERT|TLS|SSL/.test(code)
+          ? " TLS certificate validation failed; check your proxy or network security settings."
+          : " Check your internet connection, VPN, proxy, or firewall and try again.";
+  return new Error(`${label} could not connect.${hint}`);
+}
 export class HttpBackend implements ResearchModelBackend {
   constructor(
     private config: {
@@ -95,21 +147,26 @@ export class HttpBackend implements ResearchModelBackend {
     const signal = request.signal
       ? AbortSignal.any([request.signal, AbortSignal.timeout(120000)])
       : AbortSignal.timeout(120000);
-    const response = await fetch(endpoint, {
-      method: "POST",
-      redirect: "error",
-      headers: {
-        "Content-Type": "application/json",
-        ...(!local ? { Authorization: `Bearer ${this.config.apiKey}` } : {}),
-        ...(grok &&
-        this.config.cacheSession &&
-        /^[a-zA-Z0-9_-]{1,100}$/.test(this.config.cacheSession)
-          ? { "x-grok-conv-id": this.config.cacheSession }
-          : {}),
-      },
-      body: JSON.stringify(body),
-      signal,
-    });
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        redirect: "error",
+        headers: {
+          "Content-Type": "application/json",
+          ...(!local ? { Authorization: `Bearer ${this.config.apiKey}` } : {}),
+          ...(grok &&
+          this.config.cacheSession &&
+          /^[a-zA-Z0-9_-]{1,100}$/.test(this.config.cacheSession)
+            ? { "x-grok-conv-id": this.config.cacheSession }
+            : {}),
+        },
+        body: JSON.stringify(body),
+        signal,
+      });
+    } catch (error) {
+      throw connectionError(label, error, request.signal?.aborted ?? false);
+    }
     if (!response.ok)
       throw new Error(
         `${label} returned HTTP ${response.status}. Check model availability and authentication.`,
@@ -146,7 +203,7 @@ export class HttpBackend implements ResearchModelBackend {
       throw new Error("Model returned no structured text (possibly a refusal)");
     yield {
       type: "result",
-      value: JSON.parse(result.replace(/^```(?:json)?\s*|\s*```$/g, "")),
+      value: parseStructuredText(result),
       ...(parsed.usage
         ? {
             usage: {
@@ -163,6 +220,13 @@ export class HttpBackend implements ResearchModelBackend {
                 Number(
                   parsed.usage.completion_tokens ?? parsed.usage.output_tokens,
                 ) || 0,
+              ...(Number.isFinite(Number(parsed.usage.cost_in_usd_ticks)) &&
+              Number(parsed.usage.cost_in_usd_ticks) >= 0
+                ? {
+                    costUsd:
+                      Number(parsed.usage.cost_in_usd_ticks) / 10_000_000_000,
+                  }
+                : {}),
             },
           }
         : {}),

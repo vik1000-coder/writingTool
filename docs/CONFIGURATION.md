@@ -22,7 +22,7 @@ After dependency setup, run these commands in the clone to build and install:
 
 ```sh
 npm run package
-code --install-extension research-copilot-0.3.0.vsix
+code --install-extension research-copilot-0.3.1.vsix
 ```
 
 Alternatively, use **Install from VSIX…** in VS Code's Extensions view menu and select the package file. Open your research folder in the installed extension's window and configure its runtime paths below. This installs locally; it does not publish anything. Compile your manuscript with your normal LaTeX tools; compilation is not part of this extension.
@@ -73,6 +73,8 @@ Grok is the default for all modes. The default routing is `backend: "grok"` and 
 Use the sidebar's **Settings** link to change providers. Set `researchCopilot.backend` to `grok` and `researchCopilot.writeBackend` to `same` for all-Grok routing. A split such as `backend: "codex"` and `writeBackend: "grok"` remains available as an explicit override.
 
 The adapter sends bounded text context to the fixed `https://api.x.ai/v1/chat/completions` endpoint with bearer authentication and a strict JSON schema, following [xAI structured-output documentation](https://docs.x.ai/developers/model-capabilities/text/structured-outputs). Stable project evidence is placed before changing cursor context and an opaque per-session conversation ID enables [xAI prompt caching](https://docs.x.ai/developers/advanced-api-usage/prompt-caching); provider cache hits remain controlled by xAI. It does not enable web/X search, code execution, or other model tools. API usage is billed by xAI; chat subscriptions do not substitute for API credentials or credits. Provider retention policies still apply. The normal tests use fixtures, not paid Grok inference.
+
+The bottom-left usage footer reports input, cached-input, and output tokens for the last response and the current extension session. When xAI returns `usage.cost_in_usd_ticks`, the footer converts that provider-reported billed amount to USD and labels it **exact**. For older responses without that field, `grok-4.6` and `grok-4.3` use a labeled estimate from xAI's [current pricing table](https://docs.x.ai/developers/pricing), including cached-token and long-context rates. Custom/unknown models show token counts with price unavailable rather than inventing a rate. Session totals reset when the extension host restarts and are not an account invoice.
 
 ### Optional local model backend
 

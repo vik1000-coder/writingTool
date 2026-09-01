@@ -124,6 +124,7 @@ export type ResearchEvent =
         inputTokens: number;
         cachedInputTokens: number;
         outputTokens: number;
+        costUsd?: number;
       };
     };
 export interface ResearchModelBackend {

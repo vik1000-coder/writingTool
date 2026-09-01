@@ -71,6 +71,115 @@ test("Grok WRITE uses compact output, no reasoning on the fast profile, and cach
   );
   assert.notDeepEqual(bodies[0].messages[2], bodies[1].messages[2]);
 });
+test("Grok accepts the first complete structured object and reports exact provider cost", async (t) => {
+  const context = assembleContext({
+    mode: "write",
+    path: "main.txt",
+    text: "We show",
+    offset: 7,
+    artifacts: [],
+    budget: 4000,
+  });
+  t.mock.method(
+    globalThis,
+    "fetch",
+    async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content:
+                  '{"insert_text":" a difference.","evidence_ids":[],"citation_keys":[],"claims":[]}\nExtra model commentary that must be ignored.',
+              },
+            },
+          ],
+          usage: {
+            prompt_tokens: 100,
+            prompt_tokens_details: { cached_tokens: 75 },
+            completion_tokens: 12,
+            cost_in_usd_ticks: 1234000,
+          },
+        }),
+      ),
+  );
+  const events = [];
+  for await (const event of new HttpBackend({
+    kind: "grok",
+    model: "grok-4.3",
+    apiKey: "synthetic-key",
+  }).suggest({ context, prompt: buildPrompt(context) }))
+    events.push(event);
+  assert.deepEqual(events.at(-1), {
+    type: "result",
+    value: {
+      insert_text: " a difference.",
+      evidence_ids: [],
+      citation_keys: [],
+      claims: [],
+    },
+    usage: {
+      inputTokens: 100,
+      cachedInputTokens: 75,
+      outputTokens: 12,
+      costUsd: 0.0001234,
+    },
+  });
+});
+test("network failures name the provider and safe cause instead of exposing fetch failed", async (t) => {
+  const context = assembleContext({
+    mode: "guide",
+    path: "main.tex",
+    text: "Text.",
+    offset: 5,
+    artifacts: [],
+    budget: 4000,
+  });
+  t.mock.method(globalThis, "fetch", async () => {
+    const error = new TypeError("fetch failed", {
+      cause: Object.assign(new Error("private details"), { code: "ENOTFOUND" }),
+    });
+    throw error;
+  });
+  const consume = async () => {
+    for await (const _ of new HttpBackend({
+      kind: "grok",
+      model: "grok-4.6",
+      apiKey: "synthetic-secret",
+    }).suggest({ context, prompt: "bounded" })) {
+      /* consume */
+    }
+  };
+  await assert.rejects(
+    consume(),
+    (error: Error) =>
+      /Grok API could not connect.*DNS/i.test(error.message) &&
+      !/fetch failed|private|secret/i.test(error.message),
+  );
+});
+test("provider timeouts are distinguished from user cancellation", async (t) => {
+  const context = assembleContext({
+    mode: "guide",
+    path: "main.tex",
+    text: "Text.",
+    offset: 5,
+    artifacts: [],
+    budget: 4000,
+  });
+  t.mock.method(globalThis, "fetch", async () => {
+    throw new DOMException("private timeout details", "TimeoutError");
+  });
+  const consume = async () => {
+    for await (const _ of new HttpBackend({
+      kind: "grok",
+      model: "grok-4.6",
+      apiKey: "synthetic-key",
+    }).suggest({ context, prompt: "bounded" })) {
+      /* consume */
+    }
+  };
+  await assert.rejects(consume(), /Grok API request timed out.*network/i);
+});
 test("cloud adapters reject malformed keys, refused/malformed output and oversized responses", async (t) => {
   const context = assembleContext({
     mode: "guide",
@@ -253,7 +362,7 @@ test("local backend requests JSON schema, does not follow redirects, and honors 
     assert.equal(requestBody.response_format.json_schema.strict, true);
     assert.equal(requestBody.messages[0].content, "bounded prompt");
     mode = "redirect";
-    await assert.rejects(consume(), /fetch failed/);
+    await assert.rejects(consume(), /Local model could not connect/);
     mode = "hang";
     const abort = new AbortController();
     const pending = consume(abort.signal);

@@ -103,6 +103,8 @@ For “Manuscript changed after review,” request a new proposal and review the
 - An OpenAI API request needs its own API key and billing access; ChatGPT sign-in does not authorize this adapter.
 - Start a local server yourself and use a loopback `/v1` base URL. Non-loopback hosts and redirects are intentionally rejected.
 - Verify support for strict JSON-schema output, not just ordinary text chat. “No structured text,” refusal, or schema errors can mean the model/server cannot satisfy this contract.
+- Version 0.3.1 and later replace the opaque `fetch failed` message with safe DNS, timeout, refusal, TLS, or general connectivity guidance. Check the named network condition, including VPN/proxy/firewall state, then retry manually. Requests are never retried automatically because a failed response may still have incurred provider usage.
+- If Grok appends commentary after a complete structured object, 0.3.1 safely uses the first complete object and still applies all local schema/evidence checks. An incomplete object or ordinary prose remains an error.
 - HTTP errors report the status. Check the server/model configuration before retrying. There is no silent provider fallback; `writeBackend` may select a different provider specifically for WRITE.
 
 ## Rebuild safely or report a bug

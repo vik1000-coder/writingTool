@@ -359,14 +359,34 @@ summary {
   padding-bottom: 10px;
 }
 footer {
+  position: sticky;
+  z-index: 10;
+  bottom: 0;
   padding: 12px 18px;
   margin-top: 8px;
   border-top: 1px solid var(--line);
+  background: var(--vscode-sideBar-background);
+  box-shadow: 0 -5px 12px #0002;
   display: flex;
   flex-direction: column;
   gap: 5px;
   color: var(--muted);
   font-size: 10px;
+}
+.usage {
+  display: grid;
+  gap: 2px;
+  padding-bottom: 7px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--line);
+}
+.usage strong {
+  color: var(--vscode-foreground);
+  font-size: 11px;
+  font-weight: 600;
+}
+.usage span {
+  overflow-wrap: anywhere;
 }
 [hidden] {
   display: none !important;

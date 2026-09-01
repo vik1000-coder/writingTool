@@ -81,3 +81,10 @@ See [VALIDATION.md](VALIDATION.md) for test coverage, live versus fixture checks
 - [x] Plain `.txt` manuscript activation, indexing, heading context, GUIDE/WRITE, section goals, citations, and reviewed edits.
 - [x] Writing, Research, and Workspace navigation groups in the left panel with the same complete panel set.
 - [x] Deterministic Grok contract/default tests without paid CI calls and real-host `.txt` acceptance coverage.
+
+## v0.3.1 follow-up: live reliability and usage visibility
+
+- [x] Safe recovery of a complete leading structured object when provider commentary trails it.
+- [x] Provider-specific, credential-safe diagnostics for DNS, timeout, refusal, TLS, and general connection failures.
+- [x] Sticky last-request/session token footer with cached-token detail, xAI exact billed cost, and known-model fallback estimates.
+- [x] Paid synthetic Grok smoke validation plus deterministic HTTP, pricing, DOM, and real-host regressions.

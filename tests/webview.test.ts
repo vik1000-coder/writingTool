@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 const html =
-  '<body><nav></nav><select id="mode"><option value="guide">GUIDE</option><option value="off">OFF</option></select><div id="mode-help"></div><div id="status"></div><span id="provider-label"></span><button id="settings"></button><button id="suggest"></button><button id="cancel"></button><button id="setup"></button><button id="refresh"></button><div id="project-label"></div><main id="panel"></main></body>';
+  '<body><nav></nav><select id="mode"><option value="guide">GUIDE</option><option value="off">OFF</option></select><div id="mode-help"></div><div id="status"></div><span id="provider-label"></span><button id="settings"></button><button id="suggest"></button><button id="cancel"></button><button id="setup"></button><button id="refresh"></button><div id="usage-label"></div><div id="usage-detail"></div><div id="project-label"></div><main id="panel"></main></body>';
 test("sidebar groups writing, research, and workspace panels and exposes provider settings", () => {
   const dom = new JSDOM(html, { runScripts: "outside-only" });
   const messages: any[] = [];
@@ -25,6 +25,25 @@ test("sidebar groups writing, research, and workspace panels and exposes provide
         state: {
           mode: "guide",
           provider: { main: "grok", write: "same", active: "grok" },
+          usage: {
+            last: {
+              inputTokens: 676,
+              cachedInputTokens: 128,
+              outputTokens: 26,
+              totalTokens: 702,
+              costUsd: 0.0009,
+              costKind: "reported",
+            },
+            session: {
+              requests: 1,
+              pricedRequests: 1,
+              inputTokens: 676,
+              cachedInputTokens: 128,
+              outputTokens: 26,
+              totalTokens: 702,
+              costUsd: 0.0009,
+            },
+          },
         },
       },
     }),
@@ -32,6 +51,52 @@ test("sidebar groups writing, research, and workspace panels and exposes provide
   assert.equal(
     dom.window.document.getElementById("provider-label")!.textContent,
     "Grok · all modes",
+  );
+  assert.equal(
+    dom.window.document.getElementById("usage-label")!.textContent,
+    "Last request · 702 tokens · $0.0009 exact",
+  );
+  assert.equal(
+    dom.window.document.getElementById("usage-detail")!.textContent,
+    "676 input · 128 cached · 26 output · Session 1 request / 702 tokens / $0.0009",
+  );
+  dom.window.dispatchEvent(
+    new dom.window.MessageEvent("message", {
+      data: {
+        type: "state",
+        state: {
+          mode: "write",
+          timing: { source: "cache", totalMs: 2 },
+          usage: {
+            last: {
+              inputTokens: 676,
+              cachedInputTokens: 128,
+              outputTokens: 26,
+              totalTokens: 702,
+              costUsd: 0.0009,
+              costKind: "reported",
+            },
+            session: {
+              requests: 1,
+              pricedRequests: 1,
+              inputTokens: 676,
+              cachedInputTokens: 128,
+              outputTokens: 26,
+              totalTokens: 702,
+              costUsd: 0.0009,
+            },
+          },
+        },
+      },
+    }),
+  );
+  assert.equal(
+    dom.window.document.getElementById("usage-label")!.textContent,
+    "Cache hit · 0 new tokens · $0.0000",
+  );
+  assert.equal(
+    dom.window.document.getElementById("usage-detail")!.textContent,
+    "No provider call · Session 1 request / 702 tokens / $0.0009",
   );
   messages.length = 0;
   (dom.window.document.getElementById("settings") as HTMLButtonElement).click();

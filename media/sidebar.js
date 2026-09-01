@@ -62,6 +62,43 @@
       ? `${providerName(main)} · all modes`
       : `Research · ${providerName(main)} / WRITE · ${providerName(write)}`;
   }
+  const count = (value) => Number(value || 0).toLocaleString("en-US");
+  function dollars(value) {
+    if (!Number.isFinite(value)) return "price unavailable";
+    if (value > 0 && value < 0.0001) return "<$0.0001";
+    return `$${value < 0.01 ? value.toFixed(4) : value.toFixed(2)}`;
+  }
+  function renderUsage(usage = {}, timing = {}) {
+    const last = usage.last,
+      session = usage.session || {},
+      cacheHit = timing.source === "cache";
+    if (cacheHit)
+      $("usage-label").textContent = "Cache hit · 0 new tokens · $0.0000";
+    else if (last)
+      $("usage-label").textContent =
+        `Last request · ${count(last.totalTokens)} tokens · ${dollars(last.costUsd)}` +
+        (last.costKind === "reported"
+          ? " exact"
+          : last.costKind === "estimated"
+            ? " est."
+            : "");
+    else $("usage-label").textContent = "No model usage this session";
+    if (!session.requests) {
+      $("usage-detail").textContent =
+        "Token and price counts appear after a provider response.";
+      return;
+    }
+    const requestWord = session.requests === 1 ? "request" : "requests",
+      sessionCost =
+        session.pricedRequests === session.requests
+          ? dollars(session.costUsd)
+          : `${dollars(session.costUsd)} known`;
+    $("usage-detail").textContent = cacheHit
+      ? `No provider call · Session ${count(session.requests)} ${requestWord} / ${count(session.totalTokens)} tokens / ${sessionCost}`
+      : last
+        ? `${count(last.inputTokens)} input · ${count(last.cachedInputTokens)} cached · ${count(last.outputTokens)} output · Session ${count(session.requests)} ${requestWord} / ${count(session.totalTokens)} tokens / ${sessionCost}`
+        : `Session ${count(session.requests)} ${requestWord} / ${count(session.totalTokens)} tokens / ${sessionCost}`;
+  }
   function guideReferenceStrip(references) {
     const strip = node("section", undefined, "guide-reference-strip");
     strip.append(
@@ -642,6 +679,7 @@
     $("mode").value = state.mode;
     $("mode-help").textContent = descriptions[state.mode];
     $("provider-label").textContent = providerLabel(state.provider);
+    renderUsage(state.usage, state.timing);
     $("status").textContent = state.status || "";
     $("suggest").disabled = state.busy || state.mode === "off";
     $("suggest").textContent = state.busy

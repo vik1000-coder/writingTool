@@ -35,6 +35,8 @@ For WRITE, keep the manuscript editor focused and request a continuation. **Tab*
 
 WRITE keeps a small two-minute session cache by default. Reopening the exact cursor context, or typing an exact prefix of the offered continuation, can show the remaining ghost text without another model call. The full surrounding document, provider/model, and every source hash must still match. Explicit **Suggest / Regenerate** bypasses the cache. Use **Clear Suggestion Cache** when you want to remove it immediately; it never changes the manuscript.
 
+The sticky footer at the bottom of the left panel shows token and price usage without opening another view. **Last request** lists total, input, cached-input, and output tokens. **Session** accumulates successful provider responses until the extension host restarts. xAI's reported billed cost is labeled **exact**; a known-model fallback is labeled **est.** Cache hits say **0 new tokens** and **$0.0000** because they do not call the provider. Treat the session figure as a convenience counter, not an xAI invoice.
+
 Use **Research Copilot: Cancel Suggestion** or the sidebar's Cancel button to stop a pending request. Moving the cursor, editing the document, or changing modes invalidates outdated suggestions.
 
 Automatic requests are optional. Enable `researchCopilot.automaticSuggestions` only if desired: GUIDE triggers after a sentence ending, WRITE after a pause with text before the cursor, and EVIDENCE after a paragraph break. The default delay is 1,800 ms. FIGURE / TABLE and STRUCTURE stay explicit. OFF suppresses all automatic requests. A cloud backend still requires an initial explicit request and consent.
