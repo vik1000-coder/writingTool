@@ -45,4 +45,4 @@ Use an existing relevant GitHub issue or describe a new concrete defect/feature.
 
 For ordinary bugs, provide a minimal synthetic reproduction and version information as described in [Troubleshooting](docs/TROUBLESHOOTING.md#rebuild-safely-or-report-a-bug). Follow [SECURITY.md](SECURITY.md) for sensitive reports. Never post raw private context or credentials to an issue.
 
-GitHub issues track the implementation stages and follow-up work. The repository remains private until its owner decides to publish it. Do not publish a Marketplace extension, change repository visibility, or create a public release as part of ordinary development. Contributions are covered by the repository's [MIT license](LICENSE); dependencies retain their own licenses.
+GitHub issues track the implementation stages and follow-up work. Repository visibility, Marketplace publication, and GitHub releases remain explicit owner decisions rather than part of ordinary development. Contributions are covered by the repository's [MIT license](LICENSE); dependencies retain their own licenses.

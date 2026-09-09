@@ -1,6 +1,6 @@
 # Security and privacy
 
-Research Copilot is an early local-first VS Code extension. The current maintained version is 0.3.1; there is no security response SLA or independent security certification. Do not assume local indexing alone makes cloud inference appropriate for confidential research.
+Research Copilot is an early local-first VS Code extension. The current maintained version is 0.3.3; there is no security response SLA or independent security certification. Do not assume local indexing alone makes cloud inference appropriate for confidential research.
 
 ## Data and capabilities
 
@@ -18,7 +18,7 @@ Evidence validation checks current locators and source hashes. It does not certi
 
 ## Reporting a concern
 
-Do not put exploitable security details, access tokens, private manuscripts, or raw request logs into an ordinary public issue. Use GitHub's private **Report a vulnerability** route if it is available on the repository. If it is unavailable, contact the repository owner through an existing private channel; do not assume a public issue is confidential. No dedicated security email or private-reporting service is configured by this document.
+Do not put exploitable security details, access tokens, private manuscripts, or raw request logs into an ordinary public issue. Use GitHub's private **Report a vulnerability** route on the repository. If that route is unavailable, contact the repository owner through an existing private channel; do not assume a public issue is confidential. No dedicated security email or private-reporting service is configured by this document.
 
 Include affected versions, a minimal synthetic reproduction, expected versus observed access, and impact. Share only the data needed to reproduce the problem. For ordinary non-sensitive bugs, follow [Contributing](CONTRIBUTING.md).
 
