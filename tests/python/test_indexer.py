@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -99,6 +100,73 @@ class IndexTests(unittest.TestCase):
         self.assertEqual(entries[0]['year'], '2024')
         self.assertIn('{Nested}', entries[0]['title'])
         self.assertRaises(ValueError, parse_bibtex, text + '\n@book{smith2024,title={duplicate}}')
+
+    @unittest.skipUnless(research_indexer.pdf_engine.capabilities()['pdf'], 'Optional PDF dependency is not installed')
+    def test_zotero_sync_indexes_virtual_metadata_and_cached_pdf_without_external_paths(self):
+        fixture = Path(__file__).resolve().parents[2] / 'examples/bridge-study/references/pdfs/fixture2026.pdf'
+        self.write('references/references.bib', '@article{smith2026,title={Workspace Metadata},author={Smith, Ada},year={2026}}\n@article{ambiguous,title={Ambiguous local PDFs}}')
+        for name in ('references/a/ambiguous.pdf', 'references/b/ambiguous.pdf'):
+            target = self.root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(fixture, target)
+        self.index.scan()
+        self.assertNotIn('pdf_path', self.index.get('bib:ambiguous')['metadata'], 'Ambiguous filename matches must remain unlinked')
+        cache_path = '.research-copilot/zotero-cache/0123456789abcdef01234567/PDFD1234.pdf'
+        cache = self.root / cache_path
+        cache.parent.mkdir(parents=True)
+        shutil.copyfile(fixture, cache)
+        scope = {'library': 'users/0', 'libraryName': 'My Library', 'collection': 'COLL1234', 'collectionName': 'Current Paper'}
+        self.index.update_state('zotero', scope)
+        report = self.index.sync_zotero({
+            'serverId': 'server',
+            **scope,
+            'warnings': [],
+            'items': [
+                {
+                    'itemKey': 'ABCD1234', 'citationKey': 'smith2026', 'itemType': 'journalArticle',
+                    'title': 'Zotero Metadata', 'author': 'Smith, Ada', 'year': '2026',
+                    'journal': 'Journal', 'doi': '10.0/test', 'url': '', 'abstract': 'Imported abstract',
+                    'tags': ['methods'], 'version': 7,
+                    'attachments': [{'itemKey': 'PDFD1234', 'title': 'PDF', 'version': 4, 'cachePath': cache_path}],
+                },
+                {
+                    'itemKey': 'EFGH1234', 'citationKey': 'jones2026', 'itemType': 'book',
+                    'title': 'Zotero-only Item', 'author': 'Jones, Bea', 'year': '2026',
+                    'journal': '', 'doi': '', 'url': '', 'abstract': 'Distinct searchable abstract',
+                    'tags': [], 'version': 2, 'attachments': [],
+                },
+            ],
+        })
+        self.assertEqual(report['items'], 2)
+        self.assertEqual(report['pdfs'], 1)
+        self.assertEqual(self.index.get('bib:smith2026')['title'], 'Workspace Metadata', 'A project bibliography stays authoritative on citation-key collision')
+        imported = self.index.get('bib:jones2026')
+        self.assertEqual(imported['metadata']['origin'], 'zotero')
+        self.assertNotIn(str(fixture), json.dumps(imported))
+        self.assertEqual(self.index.search('distinct searchable', ['bib'])[0]['id'], 'bib:jones2026')
+        pdf = next(a for a in self.index.search('Synthetic demonstration', ['pdf']) if a['metadata'].get('origin') == 'zotero')
+        self.assertTrue(pdf['path'].startswith('zotero://users/0/items/ABCD1234/'))
+        self.assertNotIn(str(fixture), json.dumps(pdf))
+        self.assertTrue(any(edge['source'] == pdf['id'] and edge['target'] == 'bib:smith2026' for edge in self.index.graph()))
+        rendered = self.index.render_pdf(pdf['id'])
+        self.assertGreater(len(rendered['image']), 100)
+        self.index.update_state('pin', {'id': 'bib:jones2026'})
+        self.index.sync_zotero({
+            'serverId': 'server', **scope, 'warnings': [],
+            'items': [{
+                'itemKey': 'ABCD1234', 'citationKey': 'smith2026', 'itemType': 'journalArticle',
+                'title': 'Zotero Metadata', 'author': 'Smith, Ada', 'year': '2026',
+                'journal': 'Journal', 'doi': '10.0/test', 'url': '', 'abstract': '',
+                'tags': [], 'version': 7, 'attachments': [],
+            }],
+        })
+        self.assertNotIn('bib:jones2026', self.index.state()['pins'], 'Changing scope prunes controls for removed Zotero artifacts')
+        self.index.update_state('zotero', None)
+        self.assertNotIn('zotero', self.index.state())
+        self.assertNotIn('bib:jones2026', self.index.state()['pins'])
+        self.index.clear_zotero()
+        self.assertIsNone(self.index.get('bib:jones2026'))
+        self.assertIsNotNone(self.index.get('bib:smith2026'))
 
     def test_code_notebook_figures_and_confirmed_lineage_without_execution(self):
         self.write('code/plot.py', 'import pandas as pd\n\ndef make_plot():\n    """Compare ESS."""\n    d = pd.read_csv("results/sweep.csv")\n    savefig("figures/sweep.svg")\n')

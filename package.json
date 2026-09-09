@@ -1,8 +1,8 @@
 {
   "name": "research-copilot",
   "displayName": "Research Copilot",
-  "description": "Local-first research writing assistance for LaTeX and plain text with inspectable evidence.",
-  "version": "0.3.3",
+  "description": "Local-first research writing assistance for LaTeX and plain text with inspectable evidence and read-only Zotero support.",
+  "version": "0.4.0",
   "publisher": "research-copilot",
   "private": true,
   "license": "MIT",
@@ -84,6 +84,18 @@
       {
         "command": "researchCopilot.reindex",
         "title": "Research Copilot: Refresh Project Index"
+      },
+      {
+        "command": "researchCopilot.zoteroConnect",
+        "title": "Research Copilot: Connect or Change Zotero Library"
+      },
+      {
+        "command": "researchCopilot.zoteroRefresh",
+        "title": "Research Copilot: Refresh Zotero Library"
+      },
+      {
+        "command": "researchCopilot.zoteroDisconnect",
+        "title": "Research Copilot: Disconnect Zotero Library"
       },
       {
         "command": "researchCopilot.configure",

@@ -1,16 +1,18 @@
 # Security and privacy
 
-Research Copilot is an early local-first VS Code extension. The current maintained version is 0.3.3; there is no security response SLA or independent security certification. Do not assume local indexing alone makes cloud inference appropriate for confidential research.
+Research Copilot is an early local-first VS Code extension. The current maintained version is 0.4.0; there is no security response SLA or independent security certification. Do not assume local indexing alone makes cloud inference appropriate for confidential research.
 
 ## Data and capabilities
 
 - The extension has no telemetry and makes no model request on activation. Local indexing and evidence browsing do not require model inference.
 - A cloud request transmits selected manuscript excerpts, retrieved artifacts, the question, and bounded Chat history when applicable. The current manuscript remains context even if other artifacts are excluded. Consent is not a preflight preview of every source; inspect the last request afterward.
 - File/folder exclusions in `project.yaml` control discovery. Artifact exclusions apply to individual indexed units. Neither can retract a previous transmission or erase facts from existing Chat history. Filename heuristics and Git ignores are not a confidentiality guarantee.
-- The SQLite index contains extracted research text and data. Section goals, pins, paths, relationships, and optional logs can also be sensitive. These local files are not encrypted by the extension. Use normal filesystem/device protection and intentional backup/Git policies.
+- The SQLite index contains extracted research text and data. The optional Zotero cache contains derived copies of selected PDF attachments. Section goals, pins, paths, relationships, selected Zotero library/collection names, and optional logs can also be sensitive. These local files are not encrypted by the extension. Use normal filesystem/device protection and intentional backup/Git policies.
 - The optional WRITE cache can contain unpublished context and model output in extension-process memory. It is never written to disk, is bounded to 32 entries / 2 MiB / two minutes, and is cleared on extension shutdown or with **Clear Suggestion Cache**.
 - Grok is the default provider. xAI/OpenAI keys are stored through VS Code SecretStorage; Codex owns its subscription credentials when explicitly selected. Do not paste credentials into project configuration or reports. Provider-side retention and account/workspace policies remain separate from this extension.
 - The local adapter only accepts loopback URLs and refuses redirects. Whether the chosen local server forwards requests elsewhere is outside the extension's control.
+- The Zotero integration is separately fixed to Zotero's loopback HTTP API, requires API version 3, refuses redirects/non-loopback URLs, and performs read-only GET requests without a cloud API key. Zotero must expose this endpoint explicitly in its Advanced settings. Do not proxy or port-forward Zotero's unauthenticated local API to other machines.
+- Zotero PDF attachment paths are resolved locally, copied into a private workspace cache, and omitted from indexed/model-visible metadata. Cache roots, server directories, and files reject symlink escapes. Disconnecting deletes only the derived cache and imported evidence; it never modifies Zotero originals.
 - Codex suggestion sessions disable tool execution/inherited connectors and deny approvals. The indexer parses code without executing it. Model edit proposals are limited to existing `.tex` or `.txt` manuscripts and need a reviewed diff plus explicit application; raw results are not model-writable.
 - Webviews render project/model strings as text under a restrictive content security policy. PDF parsing uses local native libraries. Workspace trust and current dependencies still matter; no parser should be treated as immune to malicious files.
 
@@ -22,9 +24,9 @@ Do not put exploitable security details, access tokens, private manuscripts, or 
 
 Include affected versions, a minimal synthetic reproduction, expected versus observed access, and impact. Share only the data needed to reproduce the problem. For ordinary non-sensitive bugs, follow [Contributing](CONTRIBUTING.md).
 
-## Before making a repository public
+## Repository hygiene
 
-Review tracked files and history for credentials, unpublished work, logs, and caches. Choose whether to version `.research-copilot/state.json` and `project.yaml`; never commit the index or request logs. Confirm dependency licenses and a private security-reporting route before inviting external reports. Publishing the source or a Marketplace package is an explicit owner decision, not part of local setup.
+Review tracked files and history for credentials, unpublished work, logs, and caches. Choose whether to version `.research-copilot/state.json` and `project.yaml`; never commit the index, request logs, or Zotero cache. Confirm dependency licenses and a private security-reporting route before inviting external reports. Publishing a Marketplace package or release remains an explicit owner decision, not part of local setup.
 
 See [configuration and storage](docs/CONFIGURATION.md#local-storage-backups-and-removal) for cleanup and [usage](docs/USAGE.md#choose-request-context) for context controls.
 

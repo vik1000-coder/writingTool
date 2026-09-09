@@ -19,6 +19,11 @@ SUFFIXES = {'.tex', '.txt', '.bib', '.md', '.pdf', '.py', '.ipynb', '.csv', '.js
 SKIP_DIRS = {'.git', '.research-copilot', '.venv', 'venv', 'node_modules', '__pycache__', '.vscode', '.idea', 'dist', 'build', '.next', '.pytest_cache'}
 MAX_BYTES = 20 * 1024 * 1024
 EMPTY_STATE = {'pins': [], 'excluded': [], 'relations': [], 'sections': {}}
+ZOTERO_PATH_PREFIX = 'zotero://'
+ZOTERO_LIBRARY = re.compile(r'^(?:users/0|groups/\d{1,20})$')
+ZOTERO_KEY = re.compile(r'^[A-Z0-9]{8}$', re.I)
+ZOTERO_CITATION_KEY = re.compile(r'^[A-Za-z0-9_:./+@-]{1,200}$')
+ZOTERO_CACHE_PATH = re.compile(r'^\.research-copilot/zotero-cache/[a-f0-9]{12,64}/[A-Z0-9]{8}\.pdf$', re.I)
 
 
 def digest(data):
@@ -48,12 +53,23 @@ class Index:
             raise ValueError('Index directory must not be a symlink')
         self.local.mkdir(exist_ok=True)
         ignore = self.local / '.gitignore'
+        if ignore.is_symlink():
+            raise ValueError('Index ignore file must not be a symlink')
+        ignore_lines = ['index.sqlite*', 'logs/', 'zotero-cache/']
         if not ignore.exists():
             try:
                 with ignore.open('x', encoding='utf-8') as f:
-                    f.write('index.sqlite*\nlogs/\n')
+                    f.write('\n'.join(ignore_lines) + '\n')
             except FileExistsError:
                 pass
+        else:
+            current_ignore = ignore.read_text('utf-8')
+            missing = [line for line in ignore_lines if line not in current_ignore.splitlines()]
+            if missing:
+                with ignore.open('a', encoding='utf-8') as f:
+                    if current_ignore and not current_ignore.endswith('\n'):
+                        f.write('\n')
+                    f.write('\n'.join(missing) + '\n')
         self.db_path = self.local / 'index.sqlite'
         if self.db_path.is_symlink():
             raise ValueError('Index database must not be a symlink')
@@ -258,7 +274,7 @@ class Index:
 
     def scan(self, paths=None):
         self.load_config()
-        config_hash = digest(dumps({'config': self.config, 'index_format': 1}).encode())
+        config_hash = digest(dumps({'config': self.config, 'index_format': 2}).encode())
         old_config = self.db.execute('SELECT value FROM metadata WHERE key=\'config_hash\'').fetchone()
         configuration_changed = not old_config or old_config[0] != config_hash
         if configuration_changed:
@@ -309,9 +325,171 @@ class Index:
         except ImportError:
             return False
 
+    def artifact_source_path(self, artifact):
+        metadata = artifact.get('metadata') or {}
+        if metadata.get('origin') != 'zotero':
+            return self.safe_path(artifact['path'])
+        cache = metadata.get('cache_path')
+        if not cache:
+            return None
+        return self.zotero_cache_path(cache)
+
+    def zotero_cache_path(self, cache):
+        if not isinstance(cache, str) or not ZOTERO_CACHE_PATH.fullmatch(cache):
+            raise ValueError('Invalid Zotero cache path')
+        current = self.root
+        for part in Path(cache).parts:
+            current = current / part
+            if current.exists() and current.is_symlink():
+                raise ValueError('Zotero cache paths must not contain symlinks')
+        source = self.safe_path(cache)
+        cache_root = (self.local / 'zotero-cache').resolve()
+        if not source.is_relative_to(cache_root):
+            raise ValueError('Zotero cache path resolves outside the cache')
+        return source
+
+    def sync_zotero(self, payload):
+        if not isinstance(payload, dict) or not ZOTERO_LIBRARY.fullmatch(str(payload.get('library', ''))):
+            raise ValueError('Invalid Zotero sync payload')
+        library = payload['library']
+        server_id = payload.get('serverId')
+        collection = payload.get('collection')
+        items = payload.get('items')
+        if not isinstance(server_id, str) or not 1 <= len(server_id) <= 200:
+            raise ValueError('Invalid Zotero server identity')
+        if collection is not None and (not isinstance(collection, str) or not ZOTERO_KEY.fullmatch(collection)):
+            raise ValueError('Invalid Zotero collection key')
+        if not isinstance(items, list) or len(items) > 500:
+            raise ValueError('Zotero sync is limited to 500 items')
+
+        old_zotero_ids = {row[0] for row in self.db.execute('SELECT id FROM artifacts WHERE path LIKE ?', (ZOTERO_PATH_PREFIX + '%',))}
+        normalized = []
+        citation_keys = set()
+        for item in items:
+            if not isinstance(item, dict):
+                raise ValueError('Invalid Zotero item')
+            item_key, citation_key = item.get('itemKey'), item.get('citationKey')
+            if not isinstance(item_key, str) or not ZOTERO_KEY.fullmatch(item_key):
+                raise ValueError('Invalid Zotero item key')
+            if not isinstance(citation_key, str) or not ZOTERO_CITATION_KEY.fullmatch(citation_key):
+                raise ValueError('Invalid Zotero citation key')
+            if citation_key in citation_keys:
+                raise ValueError(f'Duplicate Zotero citation key: {citation_key}')
+            citation_keys.add(citation_key)
+            attachments = item.get('attachments', [])
+            if not isinstance(attachments, list) or len(attachments) > 20:
+                raise ValueError('A Zotero item has too many PDF attachments')
+            for attachment in attachments:
+                if not isinstance(attachment, dict) or not ZOTERO_KEY.fullmatch(str(attachment.get('itemKey', ''))):
+                    raise ValueError('Invalid Zotero attachment')
+                cache = attachment.get('cachePath')
+                self.zotero_cache_path(cache)
+            normalized.append(item)
+
+        warnings = [str(w)[:1000] for w in payload.get('warnings', [])[:100] if isinstance(w, str)] if isinstance(payload.get('warnings', []), list) else []
+        pdf_count = 0
+        with self.db:
+            self.db.execute('DELETE FROM artifacts WHERE path LIKE ?', (ZOTERO_PATH_PREFIX + '%',))
+            for item in normalized:
+                item_key, citation_key = item['itemKey'].upper(), item['citationKey']
+                virtual = f'{ZOTERO_PATH_PREFIX}{library}/items/{item_key}'
+                def text(name, limit):
+                    value = item.get(name, '')
+                    return value[:limit] if isinstance(value, str) else ''
+                tags = [tag[:200] for tag in item.get('tags', [])[:50] if isinstance(tag, str)] if isinstance(item.get('tags', []), list) else []
+                metadata = {
+                    'key': citation_key,
+                    'type': text('itemType', 100) or 'document',
+                    'title': text('title', 1000) or 'Untitled Zotero item',
+                    'author': text('author', 2000),
+                    'year': text('year', 20),
+                    'journal': text('journal', 1000),
+                    'doi': text('doi', 500),
+                    'url': text('url', 2000),
+                    'abstract': text('abstract', 8000),
+                    'tags': tags,
+                    'origin': 'zotero',
+                    'zotero_item_key': item_key,
+                    'zotero_library': library,
+                    'zotero_uri': f'zotero://select/{"library" if library == "users/0" else "groups/" + library.split("/", 1)[1]}/items/{item_key}',
+                    'zotero_version': int(item.get('version', 0)) if str(item.get('version', 0)).isdigit() else 0,
+                }
+                bib_id = 'bib:' + citation_key
+                existing = self.get(bib_id, fresh=False)
+                if not existing or existing['path'].startswith(ZOTERO_PATH_PREFIX):
+                    search_text = ' '.join(str(value) for value in [metadata['title'], metadata['author'], metadata['year'], metadata['journal'], metadata['doi'], metadata['abstract'], *tags] if value)
+                    self.put({'id': bib_id, 'kind': 'bib', 'path': virtual, 'title': metadata['title'], 'text': search_text, 'hash': digest(dumps(metadata).encode()), 'locator': {}, 'metadata': metadata})
+
+                for attachment in item.get('attachments', []):
+                    attachment_key = attachment['itemKey'].upper()
+                    cache = attachment['cachePath']
+                    source = self.zotero_cache_path(cache)
+                    attachment_virtual = f'{virtual}/attachments/{attachment_key}.pdf'
+                    try:
+                        if not source.is_file() or source.stat().st_size > MAX_BYTES:
+                            raise ValueError('cached attachment is missing or exceeds 20 MiB')
+                        raw = source.read_bytes()
+                        if not raw.startswith(b'%PDF-'):
+                            raise ValueError('cached attachment is not a PDF file')
+                        file_hash = digest(raw)
+                        blocks = pdf_engine.extract(source)
+                        if not blocks:
+                            raise ValueError('no extractable PDF text (possibly scanned)')
+                        pdf_metadata = {
+                            'origin': 'zotero',
+                            'cache_path': cache,
+                            'citation_key': citation_key,
+                            'zotero_item_key': item_key,
+                            'zotero_attachment_key': attachment_key,
+                            'zotero_library': library,
+                            'zotero_uri': metadata['zotero_uri'],
+                        }
+                        for block in blocks:
+                            self.put({
+                                'id': f'pdf:zotero:{library.replace("/", "-")}:{attachment_key}#page-{block["page"]}-block-{block["block"]}',
+                                'kind': 'pdf',
+                                'path': attachment_virtual,
+                                'title': f'{metadata["title"]} — p. {block["page"]}',
+                                'text': block['text'],
+                                'hash': file_hash,
+                                'locator': {k: value for k, value in block.items() if k != 'text'},
+                                'metadata': pdf_metadata,
+                            })
+                        pdf_count += 1
+                    except Exception as error:
+                        warnings.append(f'{metadata["title"]}: {error}')
+            self.link()
+            self.db.execute('INSERT OR REPLACE INTO metadata VALUES(\'zotero_sync\',?)', (dumps({'serverId': server_id, 'library': library, 'collection': collection}),))
+        new_zotero_ids = {row[0] for row in self.db.execute('SELECT id FROM artifacts WHERE path LIKE ?', (ZOTERO_PATH_PREFIX + '%',))}
+        removed_ids = old_zotero_ids - new_zotero_ids
+        if removed_ids:
+            state = self.state()
+            state['pins'] = [id for id in state['pins'] if id not in removed_ids]
+            state['excluded'] = [id for id in state['excluded'] if id not in removed_ids]
+            state['relations'] = [r for r in state['relations'] if r.get('source') not in removed_ids and r.get('target') not in removed_ids]
+            for memory in state['sections'].values():
+                if isinstance(memory, dict) and isinstance(memory.get('evidence'), list):
+                    memory['evidence'] = [id for id in memory['evidence'] if id not in removed_ids]
+            self.save_state(state)
+        return {
+            'items': len(normalized),
+            'pdfs': pdf_count,
+            'count': self.db.execute('SELECT count(*) FROM artifacts').fetchone()[0],
+            'warnings': list(dict.fromkeys(warnings))[:100],
+        }
+
+    def clear_zotero(self):
+        with self.db:
+            self.db.execute('DELETE FROM artifacts WHERE path LIKE ?', (ZOTERO_PATH_PREFIX + '%',))
+            self.db.execute('DELETE FROM metadata WHERE key=\'zotero_sync\'')
+            self.link()
+        return {'count': self.db.execute('SELECT count(*) FROM artifacts').fetchone()[0]}
+
     def current(self, a):
         try:
-            p = self.safe_path(a['path'])
+            p = self.artifact_source_path(a)
+            if p is None:
+                return a.get('metadata', {}).get('origin') == 'zotero'
             info = p.stat()
             if not p.is_file() or info.st_size > MAX_BYTES:
                 return False
@@ -416,6 +594,13 @@ class Index:
             raise ValueError('Invalid state.json')
         return {**json.loads(dumps(EMPTY_STATE)), **value}
 
+    def save_state(self, state):
+        self.safe_path(self.local / 'state.json')
+        with tempfile.NamedTemporaryFile('w', dir=self.local, delete=False, encoding='utf-8') as f:
+            json.dump(state, f, indent=2, ensure_ascii=False, allow_nan=False)
+            temp = f.name
+        os.replace(temp, self.local / 'state.json')
+
     def update_state(self, action, payload):
         state = self.state()
         if action in ('pin', 'exclude'):
@@ -446,13 +631,30 @@ class Index:
             if any(not self.get(id) for id in evidence):
                 raise ValueError('Unknown section evidence')
             state['sections'][id] = {'summary': summary, 'evidence': evidence}
+        elif action == 'zotero':
+            if payload is None:
+                zotero_ids = {row[0] for row in self.db.execute('SELECT id FROM artifacts WHERE path LIKE ?', (ZOTERO_PATH_PREFIX + '%',))}
+                state.pop('zotero', None)
+                state['pins'] = [id for id in state['pins'] if id not in zotero_ids]
+                state['excluded'] = [id for id in state['excluded'] if id not in zotero_ids]
+                state['relations'] = [r for r in state['relations'] if r.get('source') not in zotero_ids and r.get('target') not in zotero_ids]
+                for memory in state['sections'].values():
+                    if isinstance(memory, dict) and isinstance(memory.get('evidence'), list):
+                        memory['evidence'] = [id for id in memory['evidence'] if id not in zotero_ids]
+            else:
+                if not isinstance(payload, dict) or not ZOTERO_LIBRARY.fullmatch(str(payload.get('library', ''))):
+                    raise ValueError('Invalid Zotero connection scope')
+                collection = payload.get('collection')
+                if collection is not None and (not isinstance(collection, str) or not ZOTERO_KEY.fullmatch(collection)):
+                    raise ValueError('Invalid Zotero collection key')
+                state['zotero'] = {
+                    'library': payload['library'],
+                    'libraryName': str(payload.get('libraryName', 'Zotero'))[:300],
+                    **({'collection': collection, 'collectionName': str(payload.get('collectionName', collection))[:500]} if collection else {}),
+                }
         else:
             raise ValueError('Unknown state action')
-        self.safe_path(self.local / 'state.json')
-        with tempfile.NamedTemporaryFile('w', dir=self.local, delete=False, encoding='utf-8') as f:
-            json.dump(state, f, indent=2, ensure_ascii=False, allow_nan=False)
-            temp = f.name
-        os.replace(temp, self.local / 'state.json')
+        self.save_state(state)
         return state
 
     def link(self):
@@ -464,7 +666,10 @@ class Index:
         results = {r[0]: r[1] for r in self.db.execute('SELECT path,id FROM artifacts WHERE kind=\'result\' AND instr(id,\'#\')=0')}
         def link(source, target, relation):
             self.db.execute('INSERT OR IGNORE INTO edges VALUES(?,?,?)', (source, target, relation))
-        pdfs = {r[0] for r in self.db.execute('SELECT DISTINCT path FROM artifacts WHERE kind=\'pdf\'')}
+        pdfs = {}
+        for row in self.db.execute('SELECT data FROM artifacts WHERE kind=\'pdf\''):
+            pdf = json.loads(row[0])
+            pdfs[pdf['path']] = pdf
         for a in records:
             if a['kind'] == 'code':
                 for ref in a['metadata'].get('paths', []):
@@ -475,12 +680,17 @@ class Index:
                         link(a['id'], file_artifacts[target]['id'] if target in file_artifacts else results[target], 'generates' if target in file_artifacts else 'reads')
             elif a['kind'] == 'bib':
                 file = a['metadata'].get('file', '')
-                candidates = [p for p in pdfs if Path(p).stem == a['metadata']['key'] or (file and (p == file or p == str(Path(a['path']).parent / file)))]
+                explicit = [p for p, pdf in pdfs.items() if (pdf.get('metadata', {}).get('origin') == 'zotero' and pdf.get('metadata', {}).get('citation_key') == a['metadata']['key']) or (file and (p == file or p == str(Path(a['path']).parent / file)))]
+                stem_matches = [p for p, pdf in pdfs.items() if pdf.get('metadata', {}).get('origin') != 'zotero' and Path(p).stem == a['metadata']['key']]
+                candidates = list(dict.fromkeys(explicit + (stem_matches if len(stem_matches) == 1 else [])))
                 a['metadata'].pop('pdf_path', None)
-                if len(candidates) == 1:
+                a['metadata'].pop('pdf_paths', None)
+                if candidates:
                     a['metadata']['pdf_path'] = candidates[0]
-                    for row in self.db.execute('SELECT id FROM artifacts WHERE path=?', (candidates[0],)).fetchall():
-                        link(row[0], a['id'], 'supports')
+                    a['metadata']['pdf_paths'] = candidates
+                    for candidate in candidates:
+                        for row in self.db.execute('SELECT id FROM artifacts WHERE path=?', (candidate,)).fetchall():
+                            link(row[0], a['id'], 'supports')
                 self.put(a)
             elif a['kind'] == 'tex':
                 for key in a['metadata'].get('citations', []):
@@ -518,10 +728,13 @@ class Index:
 
     def render_pdf(self, id, page=None, scale=1.4):
         a = self.get(id)
-        if not a or Path(a['path']).suffix.lower() != '.pdf':
+        if not a or a.get('kind') != 'pdf' or Path(a['path']).suffix.lower() != '.pdf':
             raise ValueError('PDF evidence is missing or stale; refresh the index')
         pageno = page or a['locator'].get('page', 1)
-        result = pdf_engine.render(self.safe_path(a['path']), pageno, scale, a['locator'].get('rects', []) if pageno == a['locator'].get('page') else [])
+        source = self.artifact_source_path(a)
+        if source is None:
+            raise ValueError('PDF evidence is missing or stale; refresh the index')
+        result = pdf_engine.render(source, pageno, scale, a['locator'].get('rects', []) if pageno == a['locator'].get('page') else [])
         return {**result, 'text': a['text'] if pageno == a['locator'].get('page') else '', 'path': a['path']}
 
     def read_tex_span(self, name, start, end):
@@ -554,6 +767,8 @@ class Index:
             'update_state': lambda: self.update_state(p['action'], p['payload']),
             'graph': lambda: self.graph(),
             'render_pdf': lambda: self.render_pdf(p['id'], p.get('page'), p.get('scale', 1.4)),
+            'sync_zotero': lambda: self.sync_zotero(p),
+            'clear_zotero': lambda: self.clear_zotero(),
         }
         if method not in methods:
             raise ValueError(f'Unknown local operation: {method}')
@@ -568,8 +783,8 @@ def main():
         for line in sys.stdin:
             request = {}
             try:
-                if len(line) > 1000000:
-                    raise ValueError('Request exceeds size limit')
+                if len(line) > 8 * 1024 * 1024:
+                    raise ValueError('Request exceeds 8 MiB size limit')
                 request = json.loads(line)
                 result = index.dispatch(request['method'], request.get('params') or {})
                 response = {'id': request['id'], 'result': result}

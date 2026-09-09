@@ -158,6 +158,7 @@
       node(
         "span",
         (a.kind === "tex" ? "MANUSCRIPT" : a.kind.toUpperCase()) +
+          (a.metadata.origin === "zotero" ? " · ZOTERO" : "") +
           (state.pins?.includes(a.id) ? " · PINNED" : ""),
         "tag",
       ),
@@ -268,7 +269,11 @@
     const actions = node("div", undefined, "card-actions");
     actions.append(
       button(
-        a.kind === "pdf" ? "Open highlighted passage" : "Open source",
+        a.kind === "pdf"
+          ? "Open highlighted passage"
+          : a.metadata.origin === "zotero"
+            ? "Open in Zotero"
+            : "Open source",
         () => send("open", { id: a.id }),
       ),
       button(state.pins?.includes(a.id) ? "Unpin" : "Pin context", () =>
@@ -279,6 +284,10 @@
       actions.append(
         button("Insert citation", () => send("cite", { id: a.id })),
       );
+    if (a.kind === "pdf" && a.metadata.origin === "zotero")
+      actions.append(
+        button("Open item in Zotero", () => send("openZotero", { id: a.id })),
+      );
     if (tab === "Context")
       actions.append(
         button(state.excluded?.includes(a.id) ? "Include" : "Exclude", () =>
@@ -286,6 +295,40 @@
         ),
       );
     card.append(actions);
+    return card;
+  }
+  function zoteroControls() {
+    const card = node("article", undefined, "card");
+    const scope = state.zotero?.scope,
+      report = state.zotero?.report;
+    card.append(node("span", "ZOTERO · LOCAL READ-ONLY", "tag"));
+    if (!scope) {
+      card.append(
+        node("h3", "Connect your Zotero library"),
+        node(
+          "p",
+          "Import citation metadata and locally available PDF evidence through Zotero's local API.",
+          "muted",
+        ),
+        button("Connect Zotero", () => send("zoteroConnect"), "secondary"),
+      );
+      return card;
+    }
+    card.append(
+      node("h3", scope.collectionName || scope.libraryName || "Zotero"),
+      node(
+        "p",
+        report?.error
+          ? `Refresh unavailable · ${report.error}`
+          : report
+            ? `${report.items} items · ${report.pdfs} PDFs synchronized locally`
+            : "Connected; waiting for the first refresh.",
+        report?.error ? "warning" : "muted",
+      ),
+      button("Refresh Zotero", () => send("zoteroRefresh"), "secondary"),
+      button("Change library", () => send("zoteroConnect")),
+      button("Disconnect", () => send("zoteroDisconnect")),
+    );
     return card;
   }
   function renderPanel() {
@@ -328,6 +371,10 @@
           send("unlockReference"),
         ),
       );
+      if (a.metadata.origin === "zotero")
+        card.append(
+          button("Open item in Zotero", () => send("openZotero", { id: a.id })),
+        );
       const notes = node("details");
       if (
         !selected.locked &&
@@ -579,6 +626,7 @@
         Figures: ["figure", "table"],
       };
       const input = node("input", undefined, "search");
+      if (tab === "References") panel.append(zoteroControls());
       input.placeholder = `Search ${tab.toLowerCase()}…`;
       input.setAttribute("aria-label", input.placeholder);
       input.value = saved.search || "";

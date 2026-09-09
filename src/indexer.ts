@@ -6,6 +6,7 @@ import type {
   ProjectState,
   Relation,
 } from "./core/types";
+import type { ZoteroSyncPayload } from "./zotero";
 export interface ScanReport {
   indexed: number;
   unchanged: number;
@@ -14,6 +15,12 @@ export interface ScanReport {
   warnings: string[];
   capabilities: { pdf: boolean; yaml: boolean };
   config: { paper?: { root?: string }; outline?: { path?: string } };
+}
+export interface ZoteroIndexReport {
+  items: number;
+  pdfs: number;
+  count: number;
+  warnings: string[];
 }
 export class ProjectIndex {
   private client: JsonLineClient;
@@ -72,6 +79,14 @@ export class ProjectIndex {
       text: string;
       path: string;
     }>("render_pdf", { id, page, scale });
+  }
+  syncZotero(payload: ZoteroSyncPayload) {
+    return this.client.request<ZoteroIndexReport>("sync_zotero", payload, {
+      timeoutMs: 180000,
+    });
+  }
+  clearZotero() {
+    return this.client.request<{ count: number }>("clear_zotero", {});
   }
   dispose() {
     this.client.dispose();

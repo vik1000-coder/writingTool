@@ -25,7 +25,12 @@ import type {
   ResolvedSuggestion,
   Relation,
 } from "./core/types";
-import { ProjectIndex, type ScanReport } from "./indexer";
+import {
+  ProjectIndex,
+  type ScanReport,
+  type ZoteroIndexReport,
+} from "./indexer";
+import { itemUri, ZoteroClient, type ZoteroScope } from "./zotero";
 import { sidebarHtml } from "./ui/shell";
 import { showPdf } from "./ui/pdf";
 import {
@@ -103,6 +108,10 @@ export class ResearchCopilot
   private busy = false;
   private status = "Open a .tex or .txt project. Suggestions are read-only.";
   private report?: ScanReport;
+  private zoteroReport?: ZoteroIndexReport & {
+    syncedAt: string;
+    error?: string;
+  };
   private projectState = emptyState();
   private relations: Relation[] = [];
   private result?: ResolvedSuggestion;
@@ -390,6 +399,15 @@ export class ResearchCopilot
       case "refresh":
         await this.refresh();
         break;
+      case "zoteroConnect":
+        await this.connectZotero();
+        break;
+      case "zoteroRefresh":
+        await this.refreshZotero();
+        break;
+      case "zoteroDisconnect":
+        await this.disconnectZotero();
+        break;
       case "setup":
         await this.setup();
         break;
@@ -419,6 +437,9 @@ export class ResearchCopilot
         break;
       case "open":
         if (typeof m.id === "string") await this.openArtifact(m.id);
+        break;
+      case "openZotero":
+        if (typeof m.id === "string") await this.openZoteroItem(m.id);
         break;
       case "reference":
         await this.referenceAction(m.token, m.id, m.lock);
@@ -493,6 +514,10 @@ export class ResearchCopilot
           this.catalogTab === "Outline" &&
           this.catalog.every((a) => a.metadata.ephemeral),
         provider: this.providerState(),
+        zotero: {
+          scope: this.projectState.zotero,
+          report: this.zoteroReport,
+        },
         usage: { last: this.usageLast, session: this.usageSession },
       },
     });
@@ -606,6 +631,7 @@ export class ResearchCopilot
     this.indexReady = undefined;
     this.root = undefined;
     this.report = undefined;
+    this.zoteroReport = undefined;
     this.catalog = [];
     this.projectState = emptyState();
     this.history = [];
@@ -613,6 +639,47 @@ export class ResearchCopilot
     this.contextPacket = undefined;
     this.lastRequest = undefined;
     this.reviewed = undefined;
+  }
+  private async syncZotero(index: ProjectIndex, required: boolean) {
+    const scope = this.projectState.zotero as ZoteroScope | undefined;
+    if (!scope || !this.root) return;
+    this.report!.warnings = this.report!.warnings.filter(
+      (warning) => !warning.startsWith("Zotero: "),
+    );
+    try {
+      const client = new ZoteroClient();
+      const payload = await client.sync(scope, this.root.uri.fsPath);
+      const report = await index.syncZotero(payload);
+      try {
+        await client.pruneCache(this.root.uri.fsPath, payload.staleCachePaths);
+      } catch (error) {
+        report.warnings.push(
+          `Imported evidence is current, but an obsolete cache file could not be removed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      this.zoteroReport = {
+        ...report,
+        syncedAt: new Date().toISOString(),
+      };
+      this.report!.count = report.count;
+      this.report!.warnings.push(
+        ...report.warnings.map((warning) => `Zotero: ${warning}`),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.zoteroReport = {
+        items: 0,
+        pdfs: 0,
+        count: this.report?.count ?? 0,
+        warnings: [message],
+        syncedAt: new Date().toISOString(),
+        error: message,
+      };
+      this.report?.warnings.push(
+        `Zotero: ${message} Previously synchronized local evidence remains available until Zotero reconnects or you disconnect it.`,
+      );
+      if (required) throw error;
+    }
   }
   async ensureIndex(): Promise<void> {
     if (!vscode.workspace.isTrusted)
@@ -644,6 +711,7 @@ export class ResearchCopilot
       if (this.index !== index) return;
       this.report = report;
       this.projectState = state;
+      await this.syncZotero(index, false);
       this.status = `Local index ready · ${this.report.count} artifacts. No model call made.`;
       if (!this.report.capabilities.pdf)
         this.report.warnings.push(
@@ -732,8 +800,105 @@ export class ResearchCopilot
     this.publish();
     this.report = await this.index!.scan();
     this.projectState = await this.index!.state();
+    await this.syncZotero(this.index!, false);
     await this.loadCatalog();
     this.status = `Index refreshed · ${this.report.count} artifacts.`;
+    this.publish();
+  }
+  async connectZotero() {
+    await this.ensureIndex();
+    const client = new ZoteroClient();
+    this.status = "Looking for the local Zotero library…";
+    this.publish();
+    const libraries = await client.libraries();
+    const selectedLibrary = await vscode.window.showQuickPick(
+      libraries.map((library) => ({
+        label: library.name,
+        description:
+          library.id === "users/0" ? "Personal library" : "Group library",
+        library,
+      })),
+      { title: "Connect Research Copilot to a Zotero library" },
+    );
+    if (!selectedLibrary) {
+      this.status = "Zotero connection unchanged.";
+      this.publish();
+      return;
+    }
+    const collections = await client.collections(selectedLibrary.library.id);
+    const selectedCollection = await vscode.window.showQuickPick(
+      [
+        {
+          label: "Entire library",
+          description: "Up to 500 bibliographic items and 250 local PDFs",
+          collection: undefined,
+        },
+        ...collections.map((collection) => ({
+          label: collection.name,
+          description: `Collection ${collection.key}`,
+          collection,
+        })),
+      ],
+      {
+        title: `Choose a Zotero collection from ${selectedLibrary.library.name}`,
+      },
+    );
+    if (!selectedCollection) {
+      this.status = "Zotero connection unchanged.";
+      this.publish();
+      return;
+    }
+    const scope: ZoteroScope = {
+      library: selectedLibrary.library.id,
+      libraryName: selectedLibrary.library.name,
+      ...(selectedCollection.collection
+        ? {
+            collection: selectedCollection.collection.key,
+            collectionName: selectedCollection.collection.name,
+          }
+        : {}),
+    };
+    const previousScope = this.projectState.zotero;
+    this.invalidate();
+    this.projectState = await this.index!.update("zotero", scope);
+    this.status = "Importing Zotero metadata and local PDF evidence…";
+    this.publish();
+    try {
+      await this.syncZotero(this.index!, true);
+    } catch (error) {
+      this.projectState = await this.index!.update(
+        "zotero",
+        previousScope ?? null,
+      );
+      throw error;
+    }
+    await this.loadCatalog();
+    this.status = `Zotero connected · ${this.zoteroReport!.items} items · ${this.zoteroReport!.pdfs} PDFs.`;
+    this.publish();
+  }
+  async refreshZotero() {
+    await this.ensureIndex();
+    if (!this.projectState.zotero)
+      throw new Error("Connect a Zotero library first.");
+    this.invalidate();
+    this.status = "Refreshing Zotero metadata and PDF evidence…";
+    this.publish();
+    await this.syncZotero(this.index!, true);
+    await this.loadCatalog();
+    this.status = `Zotero refreshed · ${this.zoteroReport!.items} items · ${this.zoteroReport!.pdfs} PDFs.`;
+    this.publish();
+  }
+  async disconnectZotero() {
+    await this.ensureIndex();
+    if (!this.projectState.zotero) return;
+    this.invalidate();
+    this.projectState = await this.index!.update("zotero", null);
+    const result = await this.index!.clearZotero();
+    await new ZoteroClient().clearCache(this.root!.uri.fsPath);
+    if (this.report) this.report.count = result.count;
+    this.zoteroReport = undefined;
+    await this.loadCatalog();
+    this.status = "Zotero disconnected. Derived Zotero cache removed.";
     this.publish();
   }
   async setMode(mode?: Mode) {
@@ -1480,14 +1645,16 @@ export class ResearchCopilot
       this.invalidate();
       return;
     }
-    const uri = await this.safeUri(current.path);
-    if (
-      epoch !== this.epoch ||
-      vscode.workspace.textDocuments.some(
-        (d) => d.uri.toString() === uri.toString() && d.isDirty,
+    if (current.metadata.origin !== "zotero") {
+      const uri = await this.safeUri(current.path);
+      if (
+        epoch !== this.epoch ||
+        vscode.workspace.textDocuments.some(
+          (d) => d.uri.toString() === uri.toString() && d.isDirty,
+        )
       )
-    )
-      return;
+        return;
+    }
     this.selectedSource = { ...selected, locked: lock };
     this.sourceFocus++;
     await vscode.commands.executeCommand("researchCopilot.sidebar.focus");
@@ -1517,8 +1684,12 @@ export class ResearchCopilot
       throw new Error(
         "Artifact is missing or stale. Refresh the project index.",
       );
-    if (a.path.endsWith(".pdf")) {
+    if (a.kind === "pdf") {
       await showPdf(this.index!, id, this.extension.extensionUri);
+      return;
+    }
+    if (a.metadata.origin === "zotero") {
+      await this.openZoteroItem(id);
       return;
     }
     const uri = await this.safeUri(a.path);
@@ -1543,6 +1714,23 @@ export class ResearchCopilot
       new vscode.Range(position, position),
       vscode.TextEditorRevealType.InCenter,
     );
+  }
+  private async openZoteroItem(id: string) {
+    const artifact = await this.index?.get(id);
+    const library = artifact?.metadata.zotero_library;
+    const key = artifact?.metadata.zotero_item_key;
+    if (
+      !artifact ||
+      artifact.metadata.origin !== "zotero" ||
+      typeof library !== "string" ||
+      typeof key !== "string"
+    )
+      throw new Error("This artifact is not linked to a current Zotero item.");
+    const opened = await vscode.env.openExternal(
+      vscode.Uri.parse(itemUri(library, key)),
+    );
+    if (!opened)
+      throw new Error("Zotero could not open the selected library item.");
   }
   private async insertCitation(id: string) {
     const a = await this.index?.get(id),
@@ -1741,16 +1929,19 @@ export class ResearchCopilot
       problem = `Local helper unavailable: ${error instanceof Error ? error.message : String(error)}. Set pythonPath to Python 3.10+ and install requirements.txt. `;
     }
     const choice = await vscode.window.showInformationMessage(
-      `${problem}Provider: ${this.backendKind(this.mode)} · Python: ${this.python()} · PDF support: ${this.report?.capabilities.pdf ? "ready" : "missing"} · ${this.report?.count ?? 0} indexed artifacts. Suggestions default to explicit triggers.`,
+      `${problem}Provider: ${this.backendKind(this.mode)} · Python: ${this.python()} · PDF support: ${this.report?.capabilities.pdf ? "ready" : "missing"} · Zotero: ${this.projectState.zotero ? "connected" : "not connected"} · ${this.report?.count ?? 0} indexed artifacts. Suggestions default to explicit triggers.`,
       "Set Grok API key",
       "Settings",
       "Sign in with ChatGPT",
       "Choose Codex model",
+      this.projectState.zotero ? "Refresh Zotero" : "Connect Zotero",
       "Configure project",
     );
     if (choice === "Sign in with ChatGPT") await this.signIn();
     if (choice === "Set Grok API key") await this.apiKey("grok");
     if (choice === "Choose Codex model") await this.selectModel();
+    if (choice === "Connect Zotero") await this.connectZotero();
+    if (choice === "Refresh Zotero") await this.refreshZotero();
     if (choice === "Settings")
       await vscode.commands.executeCommand(
         "workbench.action.openSettings",
@@ -1953,6 +2144,9 @@ export function activate(context: vscode.ExtensionContext) {
       confirmRelation: () => controller.confirmRelation(),
       sectionMemory: () => controller.sectionMemory(),
       setup: () => controller.setup(),
+      zoteroConnect: () => controller.connectZotero(),
+      zoteroRefresh: () => controller.refreshZotero(),
+      zoteroDisconnect: () => controller.disconnectZotero(),
     };
   for (const [name, handler] of Object.entries(commands))
     context.subscriptions.push(

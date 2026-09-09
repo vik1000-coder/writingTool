@@ -49,6 +49,12 @@ export interface ProjectState {
   excluded: string[];
   relations: Relation[];
   sections: Record<string, { summary: string; evidence: string[] }>;
+  zotero?: {
+    library: string;
+    libraryName: string;
+    collection?: string;
+    collectionName?: string;
+  };
 }
 export interface ContextPacket {
   mode: Exclude<Mode, "off"> | "chat";

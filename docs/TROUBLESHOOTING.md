@@ -82,9 +82,18 @@ For an outline with an arbitrary filename, set `outline.path`. YAML requires a l
 
 ## A bibliography entry has no verified full text
 
-Put the PDF inside the project and match it uniquely to the citation key or simple BibTeX `file` path. The [reference walkthrough](USAGE.md#manage-references-and-local-pdfs) shows a working example. External absolute paths and reference-manager-specific attachment encodings are not an import workflow.
+For workspace references, put the PDF inside the project and match it uniquely to the citation key or simple BibTeX `file` path. For a connected Zotero reference, attach a local PDF to the parent Zotero item and run **Refresh Zotero Library**. The [reference walkthrough](USAGE.md#manage-references-and-local-pdfs) shows both workflows. Arbitrary external absolute paths and reference-manager-specific `.bib` attachment encodings are not imported; Zotero attachments are accessed only through the explicit local connection.
 
 PDFs classified as figures or compiled manuscript output are not literature passages. Scanned/image-only PDFs cannot supply exact text without external OCR. Extraction order can be imperfect for multi-column or unusual PDF text layers: inspect the rendered page before using a quote. Having a PDF attached does not by itself verify a claim.
+
+## Zotero will not connect or refresh
+
+- Keep the Zotero desktop app open. In Zotero **Settings → Advanced**, enable **Allow other applications on this computer to communicate with Zotero**. Research Copilot connects only to Zotero's standard loopback API; it cannot use the Zotero website or a cloud API key as a fallback.
+- If the chosen library exceeds 500 bibliographic items, connect a smaller collection. An item with more than 20 attachments is rejected; only the first 250 eligible PDFs in a scope are imported, and a warning identifies that limit.
+- A linked attachment must currently resolve to a local, text-bearing PDF no larger than 20 MiB. Cloud-only/unavailable files, web snapshots, non-PDF files, scanned pages, and missing linked files remain metadata-only and produce an indexing notice.
+- If an explicit refresh fails, the previous successful evidence is retained. Fix Zotero access and refresh again. **Disconnect Zotero Library** clears imported artifacts and the derived cache without deleting anything in Zotero.
+- Duplicate citation keys inside the selected Zotero scope are rejected. Change the keys in Zotero/Better BibTeX or select a narrower collection. When a workspace `.bib` already contains the same key, that local entry intentionally remains authoritative.
+- Research Copilot does not create your manuscript bibliography. If an inserted Zotero citation does not compile, export/auto-export that item into the `.bib` file used by your LaTeX project with the same citation key.
 
 ## The assistant misses an important source
 

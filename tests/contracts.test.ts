@@ -62,6 +62,15 @@ test("Grok is the adjustable default provider for every assistance mode", () => 
     commands.get("researchCopilot.suggestSelection") || "",
     /highlighted/i,
   );
+  assert.match(commands.get("researchCopilot.zoteroConnect") || "", /zotero/i);
+  assert.match(
+    commands.get("researchCopilot.zoteroRefresh") || "",
+    /refresh zotero/i,
+  );
+  assert.match(
+    commands.get("researchCopilot.zoteroDisconnect") || "",
+    /disconnect zotero/i,
+  );
   assert.equal(bindings.get("researchCopilot.writeGhost")?.mac, "cmd+alt+g");
   assert.equal(
     bindings.get("researchCopilot.suggestSelection")?.mac,

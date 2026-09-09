@@ -7,9 +7,9 @@ This is a VS Code extension, not a standalone editor or hosted service. The runt
 ## Request flow
 
 1. The controller captures the active manuscript, cursor, mode, and optional explicit question. Model calls are explicit unless automatic suggestions are enabled. Cloud calls require consent.
-2. The local indexer retrieves bounded artifacts by lexical relevance, resource kind, pins, and current confirmed relationships.
+2. The local indexer retrieves bounded artifacts by lexical relevance, resource kind, pins, and current confirmed relationships. An optional Zotero adapter can first project a selected local library/collection into the same artifact contract.
 3. The core assembles a context packet. Unsaved manuscript text replaces saved excerpts; dirty non-manuscript sources are withheld. Exclusions and the character budget apply before inference.
-4. The selected backend returns a schema-constrained suggestion. Grok is the default, with provider routing adjustable in Settings. The model receives preassembled context; it cannot invoke the indexer's retrieval operations itself in v0.3. A complete leading JSON object can be recovered from trailing provider commentary, then passes through the same strict local validators.
+4. The selected backend returns a schema-constrained suggestion. Grok is the default, with provider routing adjustable in Settings. The model receives preassembled context; it cannot invoke the indexer's retrieval operations itself in v0.4. A complete leading JSON object can be recovered from trailing provider commentary, then passes through the same strict local validators.
 5. Locally resolved current artifacts validate evidence IDs, citation keys, numerical locators, hashes, and insertion constraints. Cancellation and document versions prevent stale results from becoming current suggestions.
 6. GUIDE uses a native hover/decoration; the sidebar displays locally resolved source cards and session-only locked quotations. WRITE can expose a native inline completion. Chat can propose a bounded manuscript diff, which needs separate review and explicit application against unchanged text. Provider usage events feed a session-only token/cost summary; xAI-reported cost takes priority over the static documented-rate fallback.
 
@@ -24,6 +24,7 @@ This is a VS Code extension, not a standalone editor or hosted service. The runt
 | `src/core/context.ts` | Context ranking/budget and model prompt construction. |
 | `src/core/integrity.ts`, `edits.ts` | Output schema, evidence resolution, numerical/citation checks, and bounded edit validation. |
 | `src/indexer.ts` | Client for the single Python JSONL helper. |
+| `src/zotero.ts` | Read-only Zotero local API client, scope pagination, attachment validation, and private derived-cache lifecycle. |
 | `python/research_indexer.py` | Workspace discovery, incremental SQLite index, retrieval, relationships, and persistent controls. |
 | `python/parsers.py`, `pdf_engine.py` | Static source/data parsing and local PDF extraction/rendering. |
 | `src/backends/rpc.ts`, `codex.ts` | JSONL process transport and Codex app-server authentication, model selection, inference, and cancellation. |
@@ -35,9 +36,15 @@ This is a VS Code extension, not a standalone editor or hosted service. The runt
 
 An artifact has an ID, kind, workspace-relative path, title, text, source hash, locator, and metadata. Locators vary by source: PDF page/character/rectangle, result row/column, code line, or manuscript span. IDs identify indexed units; the hash establishes which file version they came from. IDs alone do not prove freshness.
 
-SQLite stores files, artifacts, inferred edges, and index metadata. Changes invalidate previous artifacts; retrieval also checks freshness against source files. The separate `state.json` stores user controls and confirmed relationship hashes. A confirmation stops being current after a source change. Deleting the cache should never delete section goals or other user state.
+SQLite stores files, artifacts, inferred edges, and index metadata. Changes invalidate previous artifacts; retrieval also checks freshness against source files. Zotero metadata uses validated virtual `zotero://` artifact paths, while its PDF artifacts retain hashes over private cached bytes. Original external attachment paths never enter SQLite. The separate `state.json` stores user controls, the selected Zotero scope, and confirmed relationship hashes. A confirmation stops being current after a source change. Deleting the index should never delete section goals or other user state.
 
 The helper uses JSONL over standard I/O: requests have `id`, `method`, and optional `params`; replies contain the same `id` with either `result` or `error`. Its dispatch table exposes bounded search, source lookup, result slices, structure, PDF rendering, state updates, and graph operations. This is an internal interface, not a stable public API or network service. `update_state` changes only Research Copilot metadata; the helper does not execute project code or rewrite raw research files.
+
+## Zotero boundary
+
+`ZoteroClient` reads API v3 from the fixed desktop loopback endpoint. The user chooses a personal/group library and optionally a collection; paginated reads stop at the explicit item/collection bounds. Regular item metadata becomes virtual bibliography artifacts. Local PDF attachments are resolved with Zotero's file-view endpoint, checked for type/size/change-during-copy, and copied atomically into `.research-copilot/zotero-cache/<server-hash>/` with restrictive permissions. Cache and manifest paths reject symlink/traversal escapes.
+
+The Python helper validates the complete TypeScript payload again before replacing prior virtual Zotero artifacts transactionally. Workspace BibTeX wins an identical citation-key ID. Cached PDFs then use the normal PDFium extraction, source hashes, locators, relationship graph, rendering, context selection, and integrity checks. An unavailable background refresh retains the last successful evidence with a warning; an explicit refresh fails visibly. Disconnect prunes Zotero-derived controls and deletes only the derived cache.
 
 ## Provider boundary
 

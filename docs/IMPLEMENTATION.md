@@ -1,6 +1,6 @@
 # Implementation and acceptance ledger
 
-The supplied v0.1 specification is authoritative. Deliver Stages A–C as a local VS Code extension. Stage D, collaboration, experiment execution, automatic figures, and cloud services are explicitly deferred.
+The supplied v0.1 specification is authoritative. The core delivers Stages A–C as a local VS Code extension. Stage D, collaboration, experiment execution, automatic figures, and cloud services remain deferred; v0.4 adds an explicitly bounded read-only Zotero desktop bridge without expanding model capabilities.
 
 ## Stage A — interaction and local foundations
 
@@ -45,11 +45,11 @@ The supplied v0.1 specification is authoritative. Deliver Stages A–C as a loca
 
 Implementation checked against `codex-cli 0.133.0` generated schemas and live-tested CLI 0.151.0 and [official App Server documentation](https://learn.chatgpt.com/docs/app-server). The integration sends `initialize`/`initialized`, starts an ephemeral read-only thread, constrains `turn/start` with an output schema, and handles completion, cancellation, and denied approval requests.
 
-PDF extraction/rendering uses the [PDFium Python API](https://pypdfium2.readthedocs.io/en/stable/python_api.html); inline suggestions use the [VS Code language API](https://code.visualstudio.com/api/language-extensions/programmatic-language-features).
+PDF extraction/rendering uses the [PDFium Python API](https://pypdfium2.readthedocs.io/en/stable/python_api.html); inline suggestions use the [VS Code language API](https://code.visualstudio.com/api/language-extensions/programmatic-language-features). Zotero reads follow its [local API](https://www.zotero.org/support/dev/web_api/v3/basics#local_api) and [Web API v3](https://www.zotero.org/support/dev/web_api/v3/start) contracts.
 
 ## Validation and deliberate boundaries
 
-See [VALIDATION.md](VALIDATION.md) for test coverage, live versus fixture checks, performance measurements, and platform limits. The model receives preassembled context through the local scoped retrieval core; model-initiated tool loops are not enabled. External research directories are supported by opening their common parent as the workspace.
+See [VALIDATION.md](VALIDATION.md) for test coverage, live versus fixture checks, performance measurements, and platform limits. The model receives preassembled context through the local scoped retrieval core; model-initiated tool loops are not enabled. Ordinary external research directories are supported by opening their common parent as the workspace; Zotero is the narrow exception and imports only through its explicit local API into the ignored derived cache.
 
 ## v0.2 follow-up: Grok and writing cards
 
@@ -88,3 +88,13 @@ See [VALIDATION.md](VALIDATION.md) for test coverage, live versus fixture checks
 - [x] Provider-specific, credential-safe diagnostics for DNS, timeout, refusal, TLS, and general connection failures.
 - [x] Sticky last-request/session token footer with cached-token detail, xAI exact billed cost, and known-model fallback estimates.
 - [x] Paid synthetic Grok smoke validation plus deterministic HTTP, pricing, DOM, and real-host regressions.
+
+## v0.4.0 follow-up: read-only Zotero evidence
+
+- [x] Connect a personal/group Zotero library or one collection through the fixed local API v3 endpoint, with bounded pagination and no cloud credential.
+- [x] Import bounded metadata and citation keys as virtual bibliography artifacts while preserving workspace `.bib` authority on key collisions.
+- [x] Resolve eligible local PDF attachments into an ignored, private, atomic derived cache without persisting original external paths.
+- [x] Reuse existing PDF extraction, exact locators, evidence rendering, freshness checks, relationships, citation integrity, and model-context controls.
+- [x] Open original items in Zotero; refresh explicitly or best-effort with the project; disconnect by pruning derived evidence/state and deleting only the cache.
+- [x] Reject remote endpoints, redirects, traversal/symlink cache escapes, malformed identities/responses, duplicate citation keys, oversized scopes/files, and changed-during-copy attachments.
+- [x] Unit, DOM, Python/PDF, manifest-contract, and package regressions cover the integration without contacting a live Zotero library; the existing real extension-host suite verifies the surrounding extension lifecycle remains intact.

@@ -2,7 +2,7 @@
 
 **Think about what to write before asking AI to write it.**
 
-A local-first VS Code extension for scientific writing in LaTeX or plain `.txt` manuscripts. It combines your manuscript, optional outline, bibliography, local PDFs, results, code, and figures into small, inspectable model requests. The researcher remains the author.
+A local-first VS Code extension for scientific writing in LaTeX or plain `.txt` manuscripts. It combines your manuscript, optional outline, bibliography or connected Zotero collection, local PDFs, results, code, and figures into small, inspectable model requests. The researcher remains the author.
 
 The implementation covers the specification's Stages A–C, with the deliberate boundaries recorded in the implementation ledger. It uses the existing VS Code editor and your usual LaTeX tooling. There is no hosted service, account system, vector database, or custom compiler.
 
@@ -59,7 +59,7 @@ The internal representation separates **lens** from **intervention level**. Ever
 
 ## Evidence you can inspect
 
-- **References:** Indexed BibTeX metadata, citation insertion, and matched local PDFs. Cards display author/year/venue; full entries remain editable in your bibliography file. Unknown citation keys are blocked. A bibliography entry without retrieved full text is explicitly unverified.
+- **References:** Indexed BibTeX or read-only Zotero metadata, citation insertion, and matched local PDFs. Cards display author/year/venue and open connected entries in Zotero. Workspace `.bib` entries remain authoritative when citation keys collide. A reference without retrieved full text is explicitly unverified.
 - **PDFs:** Exact locally extracted text, page, character range, and bounding rectangles. **Open highlighted passage** renders that page locally and highlights the stored source region. Page controls and zoom are included; no external PDF service is involved.
 - **Results:** CSV and JSON schemas, dimensions, previews, numeric statistics and slices of at most 25 rows. Row numbers count data records, excluding the CSV header (including quoted multiline records).
 - **Numbers:** A numerical WRITE claim needs a matching cell, row, column and current file hash. Missing or stale provenance blocks ghost-text insertion. Grounding means the cited cell exists; it does **not** establish that an interpretation, unit, causal claim, or statistical inference is correct. Derived quantities are not silently certified as computed analysis.
@@ -67,6 +67,8 @@ The internal representation separates **lens** from **intervention level**. Ever
 - **Project intelligence:** Python AST and notebook code cells are parsed without execution. Figure labels, captions, manuscript references, and discoverable code/data relationships are registered. Inferred lineage is distinguishable from user-confirmed relationships.
 
 Markdown outlines remain valid. YAML outlines can hold goals, claims, evidence, figures, and status. Without an outline, manuscript headings supply an ephemeral structure; no outline file is created or overwritten. **Set Current Section Goal** stores a local section summary and pinned evidence. The assistant follows the active manuscript, cursor, headings, and unsaved prose. Outline editing and writing-stage status remain under your control; there is no automatic completion tracking or drag-and-drop outline editor. See the [outline walkthrough](docs/USAGE.md#manage-the-outline-and-section-goals).
+
+To use Zotero, open the desktop app, enable its local API in **Settings → Advanced → Allow other applications on this computer to communicate with Zotero**, then choose **Connect Zotero** in the References panel. Select a personal/group library and optionally a collection. Metadata and text-bearing PDF attachments become searchable local evidence; no Zotero cloud API key is used. See the [Zotero walkthrough](docs/USAGE.md#connect-zotero).
 
 ## Use an existing research project
 
@@ -97,9 +99,9 @@ exclude:
 
 All paths are workspace-relative. Open a common parent folder if research files live in sibling directories. External paths and symlinks escaping the workspace are deliberately rejected. A configured resource list scopes that type; omitted lists use discovery. `.parquet` is deferred following the explicit MVP artifact list; CSV/JSON are supported now.
 
-The disposable SQLite index lives at `.research-copilot/index.sqlite`. The helper creates an ignore file for its database and optional logs. Pins, exclusions, confirmed relationships, and section goals live in `state.json`, independently of the index. You can choose whether to version `state.json` and `project.yaml`. **Refresh Project Index** picks up changes; file watchers update incrementally.
+The disposable SQLite index lives at `.research-copilot/index.sqlite`. Zotero PDF attachments selected for indexing are copied to the ignored `.research-copilot/zotero-cache/`; disconnecting removes that derived cache. The helper creates an ignore file for the database, cache, and optional logs. Pins, exclusions, confirmed relationships, section goals, and the selected Zotero scope live in `state.json`, independently of the index. You can choose whether to version `state.json` and `project.yaml`. **Refresh Project Index** picks up changes; file watchers update incrementally.
 
-Limits keep local work bounded: 5,000 discovered files, 20 MiB per file, 100,000 data rows, 200 columns, 500 pages per PDF, and a configurable default context budget of 24,000 characters. Oversized or corrupt sources produce a visible notice and do not remain usable as stale evidence.
+Limits keep local work bounded: 5,000 discovered files, 20 MiB per file, 100,000 data rows, 200 columns, 500 pages per PDF, 500 Zotero items and 250 Zotero PDFs per connected scope, and a configurable default context budget of 24,000 characters. Oversized or corrupt sources produce a visible notice and do not remain usable as stale evidence.
 
 ## Backends and settings
 
@@ -135,7 +137,7 @@ The Codex adapter was tested with CLI **0.151.0**, including live ChatGPT-authen
 
 ```sh
 npm run package
-code --install-extension research-copilot-0.3.3.vsix
+code --install-extension research-copilot-0.4.0.vsix
 ```
 
 The VSIX contains the bundled extension, webview assets, Python helper sources, and the usage/configuration/troubleshooting guides. Development tools, models, node_modules and Python wheels are **not** bundled. For an installed VSIX, set `pythonPath` in **User Settings** to your prepared Python environment (for example the absolute path to this clone's `.venv/bin/python`, or `.venv\\Scripts\\python.exe` on Windows). A Codex executable is needed only if you select the optional Codex provider. Use **Check Local Setup** to inspect capabilities. No VS Code Marketplace publication is required. Windows remains unverified; macOS and Linux have been exercised.
@@ -163,10 +165,10 @@ npx tsx scripts/smoke-grok.ts /absolute/path/to/key-file.rtf
 
 The normal test suite makes no cloud model requests. It treats Grok as the product default and exercises the xAI request contract with mocked HTTP; the real extension-host suite uses a deterministic loopback provider so CI never spends API credits. Python tests use `.venv` when available; without optional dependencies, PDF/YAML-specific cases explicitly skip. Run setup for the full suite. Tests cover `.tex` and `.txt` manuscripts, malformed sources, provenance forgery, citation injection, cancellation, subprocess failure, unsaved changes, configuration invalidation, result indexing, PDF geometry, and read-only interaction. Native inline commit tests require an OS-focused test window; background hosts verify completion state and report the focus-dependent portion separately.
 
-See [implementation coverage](docs/IMPLEMENTATION.md), [validation notes](docs/VALIDATION.md), and [contributing](CONTRIBUTING.md). The standalone shell, Zotero, collaboration, OCR, arbitrary TeX macro expansion, Parquet, analysis execution, and automatic figure generation remain outside this MVP. Retrieval is local lexical ranking with mode priorities and explicit relationships, not a claim of perfect semantic relevance.
+See [implementation coverage](docs/IMPLEMENTATION.md), [validation notes](docs/VALIDATION.md), and [contributing](CONTRIBUTING.md). The standalone shell, collaboration, OCR, arbitrary TeX macro expansion, Parquet, analysis execution, automatic figure generation, and Zotero write-back remain outside this MVP. Retrieval is local lexical ranking with mode priorities and explicit relationships, not a claim of perfect semantic relevance.
 
 ## Privacy
 
-This extension has no telemetry. It launches one local indexer and only the selected model provider on demand; it creates no listening service and does not scrape chat websites. Research files remain ordinary local files. Cloud model use transmits selected context and the prompt (including bounded Chat history when applicable) to that provider; local storage does not imply offline inference. Provider authentication, retention, and administrative settings remain applicable. Logs are opt-in and may contain unpublished work. Secret-name exclusions cannot identify every sensitive file: configure file/folder exclusions **before** requesting help. **Inspect Last Request** is retrospective, not a preflight approval screen. See [security and privacy](SECURITY.md).
+This extension has no telemetry. It launches one local indexer and only the selected model provider on demand; it creates no listening service and does not scrape chat websites. The optional Zotero connection reads only Zotero's loopback desktop API and copies selected PDF attachments into a private, ignored workspace cache for indexing. Cloud model use transmits selected context and the prompt (including bounded Chat history when applicable) to that provider; local storage does not imply offline inference. Provider authentication, retention, and administrative settings remain applicable. Logs and cached Zotero evidence may contain unpublished work. Secret-name exclusions cannot identify every sensitive file: configure file/folder exclusions **before** requesting help. **Inspect Last Request** is retrospective, not a preflight approval screen. See [security and privacy](SECURITY.md).
 
 MIT licensed. PDFium/Pillow/PyYAML and development dependencies retain their own licenses. The sample source PDF is generated by this repository and is not a real publication.

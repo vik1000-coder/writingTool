@@ -14,7 +14,7 @@ npm run setup
 npm run dev
 ```
 
-The repository currently requires GitHub access while private. If you already have a clone, start with `cd` into it rather than cloning again. `npm run dev` opens a separate VS Code development window containing the synthetic example. You can instead open the clone in VS Code and press **F5**. The development window uses this clone's `.venv` and npm-installed Codex when the corresponding settings retain their defaults. Setup needs network access to download dependencies; it does not install models or change system Python.
+If you already have a clone, start with `cd` into it rather than cloning again. `npm run dev` opens a separate VS Code development window containing the synthetic example. You can instead open the clone in VS Code and press **F5**. The development window uses this clone's `.venv` and npm-installed Codex when the corresponding settings retain their defaults. Setup needs network access to download dependencies; it does not install models or change system Python.
 
 ### Install the VSIX
 
@@ -22,7 +22,7 @@ After dependency setup, run these commands in the clone to build and install:
 
 ```sh
 npm run package
-code --install-extension research-copilot-0.3.3.vsix
+code --install-extension research-copilot-0.4.0.vsix
 ```
 
 Alternatively, use **Install from VSIX…** in VS Code's Extensions view menu and select the package file. Open your research folder in the installed extension's window and configure its runtime paths below. This installs locally; it does not publish anything. Compile your manuscript with your normal LaTeX tools; compilation is not part of this extension.
@@ -102,6 +102,18 @@ With `cacheSuggestions` enabled, a validated WRITE response stays only in extens
 
 Automatic and native inline requests may use this cache. **Suggest / Regenerate** deliberately makes a fresh model request. Run **Research Copilot: Clear Suggestion Cache** to erase the session entries immediately, or disable `cacheSuggestions`. Cache hits make no provider request and therefore consume no API tokens; the provider may separately cache prefixes for requests that do reach xAI.
 
+## Zotero desktop connection
+
+Zotero is an optional read-only evidence source, not a model backend. It requires the desktop app on the same computer:
+
+1. Open Zotero **Settings → Advanced** and enable **Allow other applications on this computer to communicate with Zotero**.
+2. Keep Zotero open, then use **Connect Zotero** in Research Copilot's References panel or run **Research Copilot: Connect or Change Zotero Library**.
+3. Select a personal or group library and either its whole library or one collection. The choice is stored per project in `.research-copilot/state.json`.
+
+The client is fixed to Zotero's local `http://127.0.0.1:23119/api` endpoint, requires API version 3, refuses redirects and non-loopback URLs, and sends no API key. It uses paginated reads only. Metadata remains virtual in the disposable index; selected local PDF attachments are copied into `.research-copilot/zotero-cache/` so the existing extraction, freshness, and evidence viewer can treat them safely. Original attachment paths are not stored in the index or sent as model context.
+
+The maximum connected scope is 500 bibliographic items. At most 20 attachments are examined per item and 250 text-bearing PDFs up to 20 MiB are cached. Connect a smaller collection if the item limit is exceeded. The extension does not write Zotero metadata, annotations, collections, or files and does not perform Zotero cloud sync. See the [reference walkthrough](USAGE.md#connect-zotero) for citation-key and `.bib` guidance.
+
 ## Settings reference
 
 All names below start with `researchCopilot.`.
@@ -180,8 +192,8 @@ Within a Git repository, discovery uses Git's tracked files plus untracked, non-
 | --- | --- | --- |
 | Manuscript | `.tex`, `.txt` | LaTeX structure is parsed without macro expansion/compilation. Plain text supports `#` headings and underlined headings, cursor context, ghost text, source guidance, citation placeholders, and reviewed edits. |
 | Outline / notes | `.md`, `.yaml`, `.yml` | Markdown headings/lists or YAML node mappings; no automatic outline rewriting. |
-| Bibliography | `.bib` | Parsed entries and unique citation keys; no remote metadata lookup. |
-| Literature | Text-bearing `.pdf` | Up to 500 pages per PDF; exact extraction and local rendering, no OCR. |
+| Bibliography | `.bib` or connected Zotero metadata | Parsed entries and unique citation keys; no remote metadata lookup or write-back. Workspace `.bib` entries win matching-key collisions. |
+| Literature | Text-bearing `.pdf` or connected Zotero PDF attachment | Up to 500 pages per PDF; exact extraction and local rendering, no OCR. Zotero import is limited to 250 PDFs and 20 attachments per item. |
 | Code | `.py`, `.ipynb` | Static Python/code-cell parsing; no execution or notebook-output ingestion. |
 | Results | `.csv`, `.json` | At most 100,000 rows, 200 columns, and 5,000 characters per cell. CSV requires a nonempty, unique header and consistent rows. |
 | Figures | `.pdf`, `.png`, `.svg` and recognized TeX floats | Existing artifacts and metadata; no image generation or statistical analysis. |
@@ -195,14 +207,15 @@ Search results and panel catalogs return at most 100 matches; narrow searches in
 | Location | Contents | Handling |
 | --- | --- | --- |
 | `.research-copilot/project.yaml` | Optional file scope and resource configuration | Keep or version intentionally. |
-| `.research-copilot/state.json` | Pins, artifact exclusions, confirmed relationships, section goals | Back up with your research project if you want to retain these choices; may reveal research context. |
+| `.research-copilot/state.json` | Pins, artifact exclusions, confirmed relationships, section goals, selected Zotero scope | Back up with your research project if you want to retain these choices; may reveal research context and library/collection names. |
 | `.research-copilot/index.sqlite*` | Disposable index and SQLite sidecar files | Do not commit; rebuild from source files when needed. Contains extracted research text/data. |
+| `.research-copilot/zotero-cache/` | Derived copies of connected Zotero PDF attachments and a cache manifest | Do not commit; refresh from Zotero or remove with **Disconnect Zotero Library**. Contains research documents. |
 | `.research-copilot/logs/` | Opt-in request/response records | Off by default; may contain unpublished material. Disable logging and delete unwanted logs manually. |
 | VS Code state / SecretStorage | UI preferences / optional OpenAI and Grok API keys | Managed by VS Code. Use the API-key command with an empty value to remove that key. |
 | Codex's own credential storage | ChatGPT/Codex authentication | Managed by Codex, independently of project files or extension removal. |
 
-The helper creates `.research-copilot/.gitignore` with `index.sqlite*` and `logs/` exclusions if it does not already exist. It does not hide `state.json` or `project.yaml` automatically. Your repository's own ignore rules may still hide the entire directory. Inspect both configuration and state before publishing them; this extension does not synchronize them to a service.
+The helper creates or extends `.research-copilot/.gitignore` with `index.sqlite*`, `logs/`, and `zotero-cache/` exclusions. It does not hide `state.json` or `project.yaml` automatically. Your repository's own ignore rules may still hide the entire directory. Inspect both configuration and state before publishing them; this extension does not synchronize them to a service.
 
-To rebuild a corrupt cache, close the project's VS Code window so the helper stops, remove only `.research-copilot/index.sqlite` and its `-wal` / `-shm` sidecars if present, then reopen and refresh. Keep `state.json` and `project.yaml` to retain goals and controls. Do not remove the whole directory as a routine refresh.
+To rebuild a corrupt index, close the project's VS Code window so the helper stops, remove only `.research-copilot/index.sqlite` and its `-wal` / `-shm` sidecars if present, then reopen and refresh. Keep `state.json` and `project.yaml` to retain goals and controls. Zotero evidence can be refreshed separately; disconnecting safely removes its derived PDF cache. Do not remove the whole directory as a routine refresh.
 
 To stop model use, select OFF and do not use Chat, or disable the extension. To uninstall, use VS Code's Extensions view. Uninstalling does not erase your project files, logs, Python environment, Codex installation, or provider credentials. Remove those separately only if you no longer need them.

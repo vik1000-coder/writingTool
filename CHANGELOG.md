@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 — 2026-09-09
+
+- Add a read-only Zotero desktop connection for personal/group libraries and collection-scoped metadata through the fixed loopback API v3 endpoint.
+- Import Zotero citation metadata as virtual references and keep workspace `.bib` entries authoritative when citation keys overlap.
+- Copy eligible local PDF attachments into an ignored private cache, then reuse exact PDF extraction, highlights, freshness checks, retrieval, and evidence validation without persisting original external paths.
+- Add References-panel and command-palette connect, refresh, change, disconnect, and **Open item in Zotero** actions; Zotero originals are never modified.
+- Bound and paginate the integration at 500 items, 20 attachments per item, and 250 PDFs; reject remote endpoints, redirects, duplicate keys, oversized content, and traversal/symlink cache escapes.
+- Add deterministic local-HTTP, pagination, cache lifecycle, hostile-path, DOM, command-contract, and Python/PDF integration regressions plus complete setup, privacy, and troubleshooting guidance.
+
 ## 0.3.3 — 2026-09-01
 
 - Add dedicated **Show or Generate Ghost Text** and **Suggest for Highlighted Text** commands with macOS and Linux/Windows keyboard shortcuts.

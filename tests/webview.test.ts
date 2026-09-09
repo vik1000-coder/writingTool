@@ -120,6 +120,60 @@ test("sidebar restores a saved catalog tab when the webview becomes ready", () =
   });
   dom.window.close();
 });
+test("References exposes explicit read-only Zotero connect, refresh, and disconnect controls", () => {
+  const dom = new JSDOM(html, { runScripts: "outside-only" });
+  const messages: any[] = [];
+  (dom.window as any).acquireVsCodeApi = () => ({
+    getState: () => ({ tab: "References" }),
+    setState: () => {},
+    postMessage: (message: unknown) => messages.push(message),
+  });
+  dom.window.eval(readFileSync("media/sidebar.js", "utf8"));
+  const connect = [...dom.window.document.querySelectorAll("button")].find(
+    (button) => button.textContent === "Connect Zotero",
+  ) as HTMLButtonElement;
+  connect.click();
+  assert.equal(messages.at(-1).type, "zoteroConnect");
+  dom.window.dispatchEvent(
+    new dom.window.MessageEvent("message", {
+      data: {
+        type: "state",
+        state: {
+          mode: "guide",
+          zotero: {
+            scope: {
+              library: "users/0",
+              libraryName: "My Library",
+              collection: "COLL1234",
+              collectionName: "Current <script>Paper</script>",
+            },
+            report: { items: 12, pdfs: 7, count: 50, warnings: [] },
+          },
+          catalog: [],
+        },
+      },
+    }),
+  );
+  assert.ok(
+    dom.window.document
+      .querySelector("main")!
+      .textContent!.includes("Current <script>Paper</script>"),
+  );
+  assert.equal(dom.window.document.querySelector("main script"), null);
+  const refresh = [...dom.window.document.querySelectorAll("button")].find(
+    (button) => button.textContent === "Refresh Zotero",
+  ) as HTMLButtonElement;
+  const disconnect = [...dom.window.document.querySelectorAll("button")].find(
+    (button) => button.textContent === "Disconnect",
+  ) as HTMLButtonElement;
+  refresh.click();
+  disconnect.click();
+  assert.deepEqual(
+    messages.slice(-2).map((message) => message.type),
+    ["zoteroRefresh", "zoteroDisconnect"],
+  );
+  dom.window.close();
+});
 test("WRITE reuses a ready continuation to show ghost text instead of charging again", () => {
   const dom = new JSDOM(html, { runScripts: "outside-only" });
   const messages: any[] = [];

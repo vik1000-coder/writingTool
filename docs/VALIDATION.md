@@ -4,21 +4,21 @@ Validated on 9 September 2026. These are implementation checks, not evidence tha
 
 ## Automated checks
 
-- `npm run verify`: strict TypeScript, 47 TypeScript tests, 15 Python tests (including PDFium/Pillow and YAML), and the production bundle pass locally.
+- `npm run verify`: strict TypeScript, 52 TypeScript tests, 16 Python tests (including PDFium/Pillow and YAML), and the production bundle pass locally.
 - `npm run test:extension`: passes in a real VS Code 1.137 extension host with a disposable workspace, a deterministic loopback HTTP fixture, and the real Python helper. No cloud model is called by these tests.
 - Host coverage includes activation without inference, all six modes, `.tex` and `.txt` GUIDE/WRITE behavior, token/session accounting, GUIDE topic/reference hover contents, grounded reference shortlists and current-token actions, read-only suggestions, highlighted-passage commands with backward selection normalization, grounded WRITE, invented-citation rejection, exact/partial/selection-scoped WRITE cache hits, concurrent request coalescing, explicit regeneration, dirty-source cache invalidation, OFF with explicit Chat, diff review and explicit apply, stale-review rejection, unsaved-source omission, cancellation, evidence watchers, request inspection, sidebar activation, automatic debounce, and OFF suppression.
 - The Linux CI run exercised native inline acceptance and Undo in a focused Xvfb host. Native inline rendering/acceptance and Undo depend on OS window focus. The host suite checks them when focused; when a macOS background host cannot execute native editor commands, it reports that limitation and restores only its disposable fixtures. Manual checks cover native acceptance and Undo separately.
-- `npm run setup` prepares the repository's Python environment without modifying system Python. `vsce package --no-dependencies` produces a 152.21 KB VSIX including the user guides, with no node_modules, models, Python wheels, tests, or development dependencies.
+- `npm run setup` prepares the repository's Python environment without modifying system Python. `vsce package --no-dependencies` produces a 176.41 KB VSIX including the user guides, with no node_modules, models, Python wheels, tests, or development dependencies.
 - `npm audit --omit=dev` and the full `npm audit`: no dependency vulnerabilities reported (there are no production npm dependencies).
-- Public-release review found no high-confidence credential patterns in tracked files or reachable Git history. The VSIX contents were re-inspected and remain limited to 21 expected extension files (152.21 KB); no development caches, tests, example research project, credentials, or local state are included.
+- Public-release review found no high-confidence credential patterns in tracked files or reachable Git history. The v0.4.0 VSIX contents were re-inspected and remain limited to 21 expected extension files (176.41 KB); no development caches, tests, example research project, credentials, Zotero cache, or local state are included.
 
 The tests were developed alongside the implementation. New failing regressions led to fixes for stale or fabricated evidence, numeric-sign parsing, unsafe TeX directives, changed configuration, late CSV slices, outdated relationship confirmation, PDF highlight compositing, stale sidebar snapshots, cancellation before a Codex turn ID arrives, macOS path aliases creating duplicate editor buffers, and unsaved changes shifting section offsets.
 
 ## Documentation and packaging audit
 
-- Audited usage/configuration instructions against the sidebar, command manifest, parsers, provider adapters, and local storage behavior. All 18 user commands and all 16 setting defaults are documented.
+- Audited usage/configuration instructions against the sidebar, command manifest, parsers, provider adapters, Zotero bridge, and local storage behavior. All 23 user commands and all 16 setting defaults are documented.
 - Checked local Markdown links and anchors, parsed JSON/YAML examples, and syntax-checked shell examples. Exercised the documented project configuration, Markdown/YAML outlines, and BibTeX-to-PDF matching against the real indexer in a disposable copy of the synthetic study.
-- Re-ran `npm run package` (including all 62 core/indexer tests) and `npm run test:extension`. The macOS host passed, including native GUIDE reference contents/actions, highlighted-text commands, plain-text GUIDE/WRITE, and usage accounting; its background-window limitation for native inline acceptance/Undo remains documented.
+- Re-ran `npm run package` (including all 68 core/indexer tests) and `npm run test:extension`. The macOS host passed, including native GUIDE reference contents/actions, highlighted-text commands, plain-text GUIDE/WRITE, usage accounting, and focused native acceptance/Undo.
 - Inspected the resulting ZIP: all four user-guide files are included and match their repository sources; relative guide links resolve within the installed package. A dedicated guide index avoids relying on the root README filename, which the packager lowercases. Developer docs/screenshots remain in the repository rather than increasing the installed package.
 - Clarified subscription versus API setup, artifact versus file exclusions, Git discovery behavior, retrospective request inspection, manual outline/status management, and currently unimplemented features. The v0.3.0 documentation audit needed no live inference; the separate paid v0.3.1 reliability check is recorded below.
 
@@ -56,6 +56,14 @@ New failing tests captured the old Codex default, `.txt` rejection, flat tab lis
 
 A paid request from the installed demo reproduced a Grok response containing valid structured JSON followed by extra content. Failing regressions captured that parse error, opaque network failures, absent cost conversion, and the missing footer. The adapter now deterministically takes the first complete object, retains strict local validation, reports safe network guidance, reads xAI's exact `cost_in_usd_ticks`, and falls back to documented Grok pricing only when needed. DOM and real-host tests verify the visible last-request/session counts without making CI contact a paid provider.
 
+## v0.4.0 Zotero checks
+
+Deterministic loopback HTTP tests exercise API v3 headers, personal/group discovery, multi-page collection discovery, collection-scoped item reads, BibTeX/citation-key precedence, child attachment discovery, file-view resolution, byte-for-byte cache copying, unchanged-cache reuse, refresh-time source revalidation, disconnect cleanup, item deep links, and remote endpoint rejection. A hostile nested cache symlink is rejected before attachment copying.
+
+The Python integration test passes real synthetic PDF bytes through the production PDFium extractor and renderer. It verifies virtual metadata/PDF artifact IDs, exact text retrieval, relationships, workspace `.bib` precedence, ambiguous local-PDF preservation, state pruning after scope changes/disconnect, cache-path validation, and the absence of original external paths in serialized artifacts. DOM tests cover disconnected/connected controls and hostile collection names; manifest-contract tests cover all three commands.
+
+The local Zotero probe on the validation machine returned the expected safe “not reachable” guidance because Zotero was not running. No private Zotero library was opened for this release check. Therefore the Zotero API contract is fixture-tested rather than claimed as a live-library validation; the ordinary and real extension-host suites make no Zotero cloud or model calls.
+
 ## Earlier visual checks
 
 The running extension was inspected in VS Code on macOS. Checks included mode selection, GUIDE cards, native WRITE ghost text followed by Tab and Undo, exact local quotations, PDF page navigation, return to the evidence page, zoom, and explicit Chat diff approval followed by native Undo. The highlight preserves the original glyphs. Screenshots use deterministic synthetic responses and a synthetic PDF; they are not live-model or real research examples.
@@ -78,9 +86,9 @@ The resulting SQLite file was 17,068,032 bytes. These are one-machine smoke meas
 
 ## Scope and remaining limitations
 
-- The delivered scope is the local VS Code MVP, Stages A–C. Standalone packaging, collaboration, OCR, Zotero, Parquet, automatic figure creation and experiment execution remain deferred.
+- The delivered scope is the local VS Code MVP, Stages A–C, plus a bounded read-only Zotero desktop bridge. Standalone packaging, collaboration, OCR, Zotero write-back/cloud sync, Parquet, automatic figure creation and experiment execution remain deferred.
 - The model receives bounded, mode-specific context assembled through scoped read-only retrieval operations. Those operations are available to the local core; this version does not let the model invoke an open-ended tool loop. Codex shell, connectors, filesystem writes and approval requests are disabled/denied.
-- External resource directories must be placed under a common opened workspace folder. Escaping symlinks and external paths are rejected. Multi-root workspaces use the active manuscript's root.
+- Ordinary external resource directories must be placed under a common opened workspace folder. Escaping symlinks and external paths are rejected. Zotero PDF attachments are the narrow exception: the fixed local API resolves them into an ignored derived workspace cache without preserving their original path. Multi-root workspaces use the active manuscript's root.
 - Retrieval uses local lexical relevance, mode priorities, pins and confirmed relationships. It is not a semantic search benchmark. Confirmations expire when either source hash changes.
 - TeX structure parsing handles the supported commands and nested braces, not arbitrary macro expansion. PDF text order depends on the PDF's text layer; scanned or unreadable sources remain unverified.
 - Numeric validation verifies an exact current cell locator. It does not establish scientific validity, correct units, causal support, or a statistically sound interpretation. Automatic computation is intentionally absent.
